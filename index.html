@@ -384,7 +384,7 @@ button:disabled { opacity: .35; cursor: not-allowed; }
       <input type="number" id="input-absen" placeholder="Contoh: 12" />
       <p id="err-identitas" class="error"></p>
       <div class="kesempatan-info" id="info-kesempatan">
-        Kesempatan tersisa: <strong>2</strong> dari 2
+        Isi Nama & Kelas untuk melihat kesempatan Anda.
       </div>
       <button id="btn-mulai" class="btn-primary">Mulai Ujian →</button>
     </div>
@@ -452,7 +452,7 @@ const CONFIG = {
   deteksiNotifikasiMs: 250
 };
 
-const KEY_DATA = 'ujian_ikatan_kimia_data';
+const KEY_DATA = 'ujian_ikatan_kimia_data_v2';
 
 /* ============================================================
    10 SOAL IKATAN KIMIA
@@ -481,24 +481,42 @@ const SOAL = [
 ];
 
 /* ============================================================
-   DATA TERSIMPAN
+   DATA TERSIMPAN — per identitas
+   Struktur: { siswa: { "nama|kelas|absen": { kesempatanTerpakai, riwayat: [] } } }
    ============================================================ */
 function loadData() {
   try {
     const raw = localStorage.getItem(KEY_DATA);
-    if (!raw) return { kesempatanTerpakai: 0, riwayat: [] };
+    if (!raw) return { siswa: {} };
     return JSON.parse(raw);
   } catch (e) {
-    return { kesempatanTerpakai: 0, riwayat: [] };
+    return { siswa: {} };
   }
 }
 function saveData(d) { localStorage.setItem(KEY_DATA, JSON.stringify(d)); }
+
+function buatKunciIdentitas(nama, kelas, absen) {
+  const n = (nama || '').trim().toLowerCase();
+  const k = (kelas || '').trim().toLowerCase();
+  const a = (absen || '').trim();
+  return `${n}|${k}|${a}`;
+}
+
+function getSiswaData(nama, kelas, absen) {
+  const data = loadData();
+  const kunci = buatKunciIdentitas(nama, kelas, absen);
+  if (!data.siswa[kunci]) {
+    data.siswa[kunci] = { kesempatanTerpakai: 0, riwayat: [] };
+  }
+  return { data, kunci, siswa: data.siswa[kunci] };
+}
 
 /* ============================================================
    STATE
    ============================================================ */
 const state = {
   identitas: null,
+  kunciIdentitas: null,
   jawaban: {},
   ragu: {},
   current: 0,
@@ -531,7 +549,6 @@ function initAudio() {
     if (!state.audioCtx) {
       state.audioCtx = new AC({ latencyHint: 'interactive' });
 
-      // Kompresor agresif: paksa sinyal jadi keras konsisten
       state.compressor = state.audioCtx.createDynamicsCompressor();
       state.compressor.threshold.value = -60;
       state.compressor.knee.value = 0;
@@ -569,7 +586,6 @@ function beep(freq, durasi, volume) {
   const ctx = state.audioCtx;
   const now = ctx.currentTime;
 
-  // 3 oscillator sekaligus: square (tajam) + sawtooth (tebal) + triangle (berat)
   const osc1 = ctx.createOscillator();
   osc1.type = 'square';
   osc1.frequency.setValueAtTime(freq, now);
@@ -586,7 +602,6 @@ function beep(freq, durasi, volume) {
   const g2 = ctx.createGain(); g2.gain.value = 0.6;
   const g3 = ctx.createGain(); g3.gain.value = 0.9;
 
-  // Envelope TEGAS: ON instan → OFF instan
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(volume, now + 0.003);
@@ -612,7 +627,6 @@ function startAlarmLoop() {
   if (state.alarmInterval) return;
   ensureAudioReady();
 
-  // Pola TEGAS: BEEP tinggi → BEEP tinggi → BEEP rendah → BEEP tinggi
   const polaTegas = () => {
     ensureAudioReady();
     beep(1600, 0.14, 1.0);
@@ -679,40 +693,52 @@ function stopNotifWatcher() {
 }
 
 /* ============================================================
-   INFO KESEMPATAN
+   INFO KESEMPATAN — per identitas
    ============================================================ */
 function refreshKesempatanInfo() {
-  const data = loadData();
-  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  const nama = $('input-nama').value.trim();
+  const kelas = $('input-kelas').value.trim();
+  const absen = $('input-absen').value.trim();
+
   const info = $('info-kesempatan');
   const btn = $('btn-mulai');
 
-  if (sisa > 0) {
-    info.innerHTML = `Kesempatan tersisa: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`;
+  if (!nama || !kelas) {
+    info.innerHTML = `Isi Nama & Kelas untuk melihat kesempatan Anda.`;
     info.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = data.kesempatanTerpakai === 0
+    btn.textContent = "Mulai Ujian →";
+    return;
+  }
+
+  const { siswa } = getSiswaData(nama, kelas, absen);
+  const sisa = CONFIG.maxKesempatan - siswa.kesempatanTerpakai;
+
+  if (sisa > 0) {
+    info.innerHTML = `Kesempatan <strong>${nama}</strong>: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`;
+    info.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = siswa.kesempatanTerpakai === 0
       ? "Mulai Ujian →"
-      : `Mulai Percobaan ke-${data.kesempatanTerpakai + 1} →`;
+      : `Mulai Percobaan ke-${siswa.kesempatanTerpakai + 1} →`;
   } else {
-    info.innerHTML = `Kesempatan sudah habis (0 dari ${CONFIG.maxKesempatan}).`;
+    info.innerHTML = `Kesempatan <strong>${nama}</strong> sudah habis (0 dari ${CONFIG.maxKesempatan}).`;
     info.style.display = 'block';
     btn.disabled = true;
     btn.textContent = "Kesempatan Habis";
   }
 }
+
+['input-nama', 'input-kelas', 'input-absen'].forEach(id => {
+  $(id).addEventListener('input', refreshKesempatanInfo);
+});
+
 refreshKesempatanInfo();
 
 /* ============================================================
    MULAI UJIAN
    ============================================================ */
 $('btn-mulai').addEventListener('click', async () => {
-  const data = loadData();
-  if (data.kesempatanTerpakai >= CONFIG.maxKesempatan) {
-    alert("Kesempatan ujian sudah habis.");
-    return;
-  }
-
   const nama = $('input-nama').value.trim();
   const kelas = $('input-kelas').value.trim();
   const absen = $('input-absen').value.trim();
@@ -720,14 +746,21 @@ $('btn-mulai').addEventListener('click', async () => {
   if (nama.length < 3) return ($('err-identitas').textContent = "Nama minimal 3 karakter.");
   if (kelas.length < 1) return ($('err-identitas').textContent = "Kelas wajib diisi.");
 
+  const { kunci, siswa } = getSiswaData(nama, kelas, absen);
+
+  if (siswa.kesempatanTerpakai >= CONFIG.maxKesempatan) {
+    $('err-identitas').textContent = `Kesempatan untuk "${nama}" (${kelas}) sudah habis.`;
+    return;
+  }
+
   state.identitas = { nama, kelas, absen };
-  state.percobaanKe = data.kesempatanTerpakai + 1;
+  state.kunciIdentitas = kunci;
+  state.percobaanKe = siswa.kesempatanTerpakai + 1;
   $('err-identitas').textContent = '';
 
   initAudio();
   await ensureAudioReady();
 
-  // Bunyi konfirmasi supaya OS benar-benar mengaktifkan audio
   beep(880, 0.12, 0.4);
   setTimeout(() => beep(1320, 0.12, 0.4), 150);
 
@@ -924,11 +957,15 @@ function curang(alasan) {
   stopNotifWatcher();
 
   const data = loadData();
-  data.kesempatanTerpakai += 1;
-  data.riwayat.push({
+  if (!data.siswa[state.kunciIdentitas]) {
+    data.siswa[state.kunciIdentitas] = { kesempatanTerpakai: 0, riwayat: [] };
+  }
+  data.siswa[state.kunciIdentitas].kesempatanTerpakai += 1;
+  data.siswa[state.kunciIdentitas].riwayat.push({
     percobaanKe: state.percobaanKe,
     nama: state.identitas?.nama || '-',
     kelas: state.identitas?.kelas || '-',
+    absen: state.identitas?.absen || '-',
     status: 'DIBATALKAN',
     alasan,
     nilai: 0,
@@ -942,10 +979,10 @@ function curang(alasan) {
   document.removeEventListener('fullscreenchange', onFullscreenChange);
 
   $('batal-alasan').textContent = "Pelanggaran: " + alasan;
-  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  const sisa = CONFIG.maxKesempatan - data.siswa[state.kunciIdentitas].kesempatanTerpakai;
   $('batal-info-kesempatan').textContent = sisa > 0
-    ? `Kesempatan tersisa: ${sisa}`
-    : `Kesempatan sudah habis.`;
+    ? `Kesempatan tersisa untuk ${state.identitas.nama}: ${sisa}`
+    : `Kesempatan ${state.identitas.nama} sudah habis.`;
   $('overlay-batal').classList.remove('hidden');
 
   startAlarmLoop();
@@ -967,11 +1004,15 @@ function selesaikanUjian(waktuHabis = false) {
   const nilai = Math.round((benar / SOAL.length) * 100);
 
   const data = loadData();
-  data.kesempatanTerpakai += 1;
-  data.riwayat.push({
+  if (!data.siswa[state.kunciIdentitas]) {
+    data.siswa[state.kunciIdentitas] = { kesempatanTerpakai: 0, riwayat: [] };
+  }
+  data.siswa[state.kunciIdentitas].kesempatanTerpakai += 1;
+  data.siswa[state.kunciIdentitas].riwayat.push({
     percobaanKe: state.percobaanKe,
     nama: state.identitas.nama,
     kelas: state.identitas.kelas,
+    absen: state.identitas.absen,
     status: waktuHabis ? 'WAKTU_HABIS' : 'SELESAI',
     nilai,
     jawaban: { ...state.jawaban },
@@ -981,24 +1022,25 @@ function selesaikanUjian(waktuHabis = false) {
 
   $('hasil-title').textContent = waktuHabis ? "⏰ Waktu Habis" : "✅ Ujian Selesai";
 
-  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  const sisa = CONFIG.maxKesempatan - data.siswa[state.kunciIdentitas].kesempatanTerpakai;
 
   let html = `
     <div class="hasil-row"><span>Nama</span><strong>${state.identitas.nama}</strong></div>
     <div class="hasil-row"><span>Kelas</span><strong>${state.identitas.kelas}</strong></div>
+    ${state.identitas.absen ? `<div class="hasil-row"><span>No. Absen</span><strong>${state.identitas.absen}</strong></div>` : ''}
     <div class="hasil-row"><span>Percobaan ke-</span><strong>${state.percobaanKe}</strong></div>
     <div class="hasil-row"><span>Jawaban Benar</span><strong style="color:var(--success)">${benar}</strong></div>
     <div class="hasil-row"><span>Jawaban Salah</span><strong style="color:var(--danger)">${salah}</strong></div>
     <div class="hasil-row"><span>Nilai</span><strong style="font-size:22px;color:var(--biru-600)">${nilai}</strong></div>
     <div class="kesempatan-info">
       ${sisa > 0
-        ? `Kesempatan tersisa: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`
-        : `Kesempatan sudah habis.`}
+        ? `Kesempatan tersisa untuk ${state.identitas.nama}: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`
+        : `Kesempatan ${state.identitas.nama} sudah habis.`}
     </div>
   `;
 
   if (sisa > 0) {
-    html += `<button id="btn-ulang" class="btn-primary full">Coba Lagi (Percobaan ke-${data.kesempatanTerpakai + 1})</button>`;
+    html += `<button id="btn-ulang" class="btn-primary full">Coba Lagi (Percobaan ke-${data.siswa[state.kunciIdentitas].kesempatanTerpakai + 1})</button>`;
   } else {
     html += `<button class="btn-secondary full" disabled>Kesempatan Habis</button>`;
   }
@@ -1012,6 +1054,11 @@ function selesaikanUjian(waktuHabis = false) {
       state.ragu = {};
       state.current = 0;
       show('page-identitas');
+      if (state.identitas) {
+        $('input-nama').value = state.identitas.nama;
+        $('input-kelas').value = state.identitas.kelas;
+        $('input-absen').value = state.identitas.absen || '';
+      }
       refreshKesempatanInfo();
     });
   }
@@ -1025,25 +1072,26 @@ $('btn-lanjut-setelah-batal').addEventListener('click', () => {
   $('overlay-batal').classList.add('hidden');
 
   const data = loadData();
-  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  const siswa = data.siswa[state.kunciIdentitas] || { kesempatanTerpakai: 0 };
+  const sisa = CONFIG.maxKesempatan - siswa.kesempatanTerpakai;
 
   if (sisa > 0) {
     state.jawaban = {};
     state.ragu = {};
     state.current = 0;
     show('page-identitas');
-    refreshKesempatanInfo();
     if (state.identitas) {
       $('input-nama').value = state.identitas.nama;
       $('input-kelas').value = state.identitas.kelas;
       $('input-absen').value = state.identitas.absen || '';
     }
+    refreshKesempatanInfo();
   } else {
     show('page-hasil');
     $('hasil-title').textContent = "🔒 Kesempatan Habis";
     $('hasil-content').innerHTML = `
       <p class="subtitle" style="text-align:center;margin-top:20px">
-        Anda telah menggunakan ${CONFIG.maxKesempatan} kesempatan ujian.
+        Kesempatan untuk <strong>${state.identitas.nama}</strong> (${state.identitas.kelas}) telah habis.
       </p>
       <div class="kesempatan-info">
         <strong>0</strong> dari ${CONFIG.maxKesempatan} kesempatan tersisa
