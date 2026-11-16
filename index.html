@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ujian Ikatan Kimia</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --biru-50:  #eef6ff;
+  --biru-100: #dbeafe;
+  --biru-200: #bfdbfe;
+  --biru-300: #93c5fd;
+  --biru-400: #60a5fa;
+  --biru-500: #3b82f6;
+  --biru-600: #2563eb;
+  --kuning-50:  #fffbea;
+  --kuning-100: #fef9c3;
+  --kuning-200: #fef08a;
+  --kuning-300: #fde047;
+  --kuning-400: #facc15;
+  --putih: #ffffff;
+  --bg:    #f7fbff;
+  --text:  #1e293b;
+  --text-soft: #64748b;
+  --danger: #ef4444;
+  --danger-bg: #fee2e2;
+  --success: #22c55e;
+  --success-bg: #dcfce7;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, var(--kuning-100) 0%, transparent 40%),
+    radial-gradient(circle at 90% 100%, var(--biru-100) 0%, transparent 45%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+#app { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+
+.page { display: none; }
+.page.active { display: block; animation: fadeIn .35s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ===== CARD ===== */
+.card {
+  background: var(--putih);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 6px 24px rgba(37, 99, 235, .08), 0 1px 3px rgba(0,0,0,.04);
+  margin-bottom: 16px;
+  border: 2px solid var(--biru-100);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--kuning-300), var(--biru-300), var(--kuning-300));
+}
+.card-header { text-align: center; margin-bottom: 24px; }
+.card-icon { font-size: 42px; margin-bottom: 8px; filter: drop-shadow(0 4px 8px rgba(37,99,235,.2)); }
+.card-header h1 { font-size: 24px; margin-bottom: 6px; color: var(--biru-600); }
+h1 { font-size: 22px; margin-bottom: 6px; color: var(--biru-600); }
+.subtitle { color: var(--text-soft); font-size: 14px; }
+
+/* ===== FORM ===== */
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 14px 0 6px;
+  color: var(--biru-600);
+}
+input[type="text"], input[type="number"] {
+  width: 100%;
+  padding: 13px 16px;
+  border: 2px solid var(--biru-100);
+  border-radius: 12px;
+  font-size: 15px;
+  background: var(--biru-50);
+  transition: all .2s;
+  color: var(--text);
+  font-family: inherit;
+}
+input::placeholder { color: #94a3b8; }
+input:focus {
+  outline: none;
+  border-color: var(--kuning-400);
+  background: var(--kuning-50);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, .15);
+}
+
+/* ===== BUTTON ===== */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform .12s, box-shadow .2s;
+  margin-top: 16px;
+  font-family: inherit;
+}
+button:active { transform: scale(.97); }
+button:disabled { opacity: .35; cursor: not-allowed; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--biru-400), var(--biru-600));
+  color: #fff;
+  width: 100%;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, .35);
+}
+.btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(37, 99, 235, .5); }
+
+.btn-secondary {
+  background: var(--putih);
+  color: var(--biru-600);
+  border: 2px solid var(--biru-200);
+}
+.btn-secondary:hover { background: var(--biru-50); }
+
+.btn-warning {
+  background: linear-gradient(135deg, var(--kuning-300), var(--kuning-400));
+  color: #713f12;
+  box-shadow: 0 3px 10px rgba(250, 204, 21, .4);
+}
+.btn-warning:hover { box-shadow: 0 5px 16px rgba(250, 204, 21, .55); }
+
+.btn-danger {
+  background: linear-gradient(135deg, #f87171, var(--danger));
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, .35);
+}
+.btn-danger:hover { box-shadow: 0 6px 20px rgba(239, 68, 68, .5); }
+
+.full { width: 100%; }
+.error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; font-weight: 600; }
+
+/* ===== EXAM HEADER ===== */
+.exam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, var(--biru-500), var(--biru-600));
+  padding: 16px 20px;
+  border-radius: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, .3);
+  color: #fff;
+}
+.exam-info { display: flex; flex-direction: column; font-size: 13px; }
+.exam-info strong { font-size: 16px; }
+.exam-info span { opacity: .85; }
+
+.timer-box {
+  text-align: right;
+  background: rgba(255,255,255,.18);
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+.timer-label { display: block; font-size: 11px; opacity: .9; text-transform: uppercase; letter-spacing: .5px; }
+.timer {
+  font-size: 26px;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  color: var(--kuning-200);
+  text-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.timer.warning { animation: pulse 1s infinite; color: #fecaca; }
+@keyframes pulse { 50% { opacity: .5; } }
+
+/* ===== PROGRESS ===== */
+.progress-bar {
+  height: 10px;
+  background: var(--biru-100);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--kuning-300), var(--biru-400));
+  border-radius: 99px;
+  transition: width .35s ease;
+}
+.progress-text {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-bottom: 14px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* ===== SOAL ===== */
+.soal-card { padding: 22px; }
+.soal-nomor {
+  font-size: 13px;
+  color: var(--biru-600);
+  margin-bottom: 12px;
+  font-weight: 700;
+  background: var(--biru-50);
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 99px;
+}
+.soal-text { font-size: 16px; margin-bottom: 20px; line-height: 1.65; }
+
+.pilihan { display: flex; flex-direction: column; gap: 12px; }
+.pilihan label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 2px solid var(--biru-100);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all .18s;
+  font-weight: 500;
+  font-size: 15px;
+  background: var(--putih);
+  margin: 0;
+  color: var(--text);
+}
+.pilihan label:hover {
+  border-color: var(--kuning-300);
+  background: var(--kuning-50);
+}
+.pilihan label.selected {
+  border-color: var(--biru-500);
+  background: linear-gradient(135deg, var(--biru-50), var(--kuning-50));
+  box-shadow: 0 3px 12px rgba(37, 99, 235, .18);
+}
+.pilihan label.selected span strong { color: var(--biru-600); }
+.pilihan label.locked { cursor: not-allowed; opacity: .75; }
+.pilihan input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border: 2px solid var(--biru-200);
+  border-radius: 50%;
+  margin-top: 2px;
+  flex-shrink: 0;
+  position: relative;
+  transition: all .15s;
+  background: var(--putih);
+}
+.pilihan input[type="radio"]:checked {
+  border-color: var(--biru-600);
+  background: var(--biru-600);
+}
+.pilihan input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+.pilihan span strong { color: var(--biru-500); margin-right: 4px; }
+
+/* ===== NAVIGASI ===== */
+.nav-soal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+  background: var(--putih);
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid var(--biru-100);
+}
+.nav-btn {
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 800;
+  border: 2px solid var(--biru-100);
+  background: var(--biru-50);
+  color: var(--biru-600);
+  border-radius: 10px;
+  margin: 0;
+  transition: all .15s;
+}
+.nav-btn.current {
+  border-color: var(--biru-600);
+  background: linear-gradient(135deg, var(--biru-500), var(--biru-600));
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .4);
+}
+.nav-btn.answered {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: #166534;
+}
+.nav-btn.locked {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* ===== ACTIONS ===== */
+.exam-actions { display: flex; gap: 10px; margin-bottom: 10px; }
+.exam-actions button { flex: 1; margin: 0; font-size: 14px; padding: 13px 10px; }
+
+/* ===== HASIL ===== */
+#hasil-content { margin: 22px 0; }
+.hasil-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 4px;
+  border-bottom: 2px dashed var(--biru-100);
+  font-size: 15px;
+}
+.hasil-row:last-child { border-bottom: none; }
+.hasil-row span { color: var(--text-soft); font-weight: 500; }
+.hasil-row strong { font-weight: 800; color: var(--text); }
+
+/* ===== OVERLAY PELANGGARAN ===== */
+.overlay-batal {
+  position: fixed;
+  inset: 0;
+  background: var(--danger);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 24px;
+  animation: flashRed .6s infinite alternate;
+}
+.overlay-batal.hidden { display: none; }
+@keyframes flashRed {
+  from { background: #ef4444; }
+  to { background: #991b1b; }
+}
+.batal-content {
+  max-width: 500px;
+  background: rgba(0,0,0,.18);
+  padding: 40px 28px;
+  border-radius: 24px;
+  border: 3px solid rgba(255,255,255,.35);
+}
+.batal-content h1 {
+  font-size: 30px;
+  margin-bottom: 20px;
+  color: #fff;
+  animation: shake .5s;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+.batal-content p { font-size: 17px; margin-bottom: 10px; font-weight: 600; }
+.batal-sub { opacity: .9; font-size: 14px !important; font-weight: 400 !important; }
+
+/* ===== MOBILE ===== */
+@media (max-width: 480px) {
+  .card { padding: 20px; border-radius: 16px; }
+  .card-icon { font-size: 36px; }
+  .timer { font-size: 22px; }
+  .exam-info strong { font-size: 14px; }
+  .exam-header { padding: 12px 16px; }
+  .exam-actions button { font-size: 13px; padding: 12px 8px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== IDENTITAS ===== -->
+  <section id="page-identitas" class="page active">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">⚗️</div>
+        <h1>Ujian Ikatan Kimia</h1>
+        <p class="subtitle">Masukkan identitas Anda untuk memulai</p>
+      </div>
+      <label>Nama Lengkap</label>
+      <input type="text" id="input-nama" placeholder="Contoh: Budi Santoso" autocomplete="off" />
+      <label>Kelas</label>
+      <input type="text" id="input-kelas" placeholder="Contoh: X IPA 1" autocomplete="off" />
+      <label>Nomor Absen (opsional)</label>
+      <input type="number" id="input-absen" placeholder="Contoh: 12" />
+      <p id="err-identitas" class="error"></p>
+      <button id="btn-mulai" class="btn-primary">Mulai Ujian →</button>
+    </div>
+  </section>
+
+  <!-- ===== UJIAN ===== -->
+  <section id="page-ujian" class="page">
+    <header class="exam-header">
+      <div class="exam-info">
+        <strong id="exam-nama"></strong>
+        <span id="exam-kelas"></span>
+      </div>
+      <div class="timer-box">
+        <span class="timer-label">⏱ Sisa Waktu</span>
+        <span id="timer" class="timer">00:00</span>
+      </div>
+    </header>
+
+    <div class="progress-bar"><div id="progress-fill"></div></div>
+    <p class="progress-text"><span id="progress-text">0</span> dari <span id="total-soal">10</span> soal terjawab</p>
+
+    <div class="card soal-card">
+      <div class="soal-nomor">Soal <span id="nomor-soal">1</span> / <span id="total-soal-2">10</span></div>
+      <p id="teks-soal" class="soal-text"></p>
+      <div id="pilihan" class="pilihan"></div>
+    </div>
+
+    <div class="nav-soal" id="nav-soal"></div>
+
+    <div class="exam-actions">
+      <button id="btn-ragu" class="btn-warning">⚑ Ragu</button>
+      <button id="btn-next" class="btn-primary">Selanjutnya →</button>
+    </div>
+    <button id="btn-selesai" class="btn-danger full">✓ Selesai Ujian</button>
+  </section>
+
+  <!-- ===== HASIL ===== -->
+  <section id="page-hasil" class="page">
+    <div class="card">
+      <h1 id="hasil-title">✅ Ujian Selesai</h1>
+      <div id="hasil-content"></div>
+    </div>
+  </section>
+
+  <!-- ===== OVERLAY PELANGGARAN ===== -->
+  <div id="overlay-batal" class="overlay-batal hidden">
+    <div class="batal-content">
+      <h1>⚠️ UJIAN DIBATALKAN ⚠️</h1>
+      <p id="batal-alasan">Kecurangan terdeteksi.</p>
+      <p class="batal-sub">Jawaban Anda telah otomatis disimpan.</p>
+      <p class="batal-sub">Ujian tidak dapat diulang.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   KONFIGURASI
+   ============================================================ */
+const CONFIG = {
+  durasiUjianMenit: 30
+};
+
+const KEY_RIWAYAT = 'ujian_ikatan_kimia_selesai';
+
+/* ============================================================
+   10 SOAL IKATAN KIMIA
+   ============================================================ */
+const SOAL = [
+  { q: "Ikatan yang terbentuk akibat serah-terima elektron dari atom satu ke atom lain disebut...",
+    opsi: ["Ikatan kovalen", "Ikatan ion", "Ikatan logam", "Ikatan hidrogen", "Ikatan van der Waals"], jawab: 1 },
+  { q: "Senyawa berikut yang berikatan ion adalah...",
+    opsi: ["H₂O", "CO₂", "NaCl", "CH₄", "NH₃"], jawab: 2 },
+  { q: "Ikatan kovalen terbentuk antara atom-atom yang...",
+    opsi: ["Memiliki elektron valensi sangat banyak", "Saling berbagi pasangan elektron", "Menyerahkan elektron secara penuh", "Memiliki muatan listrik", "Merupakan logam transisi"], jawab: 1 },
+  { q: "Ikatan kovalen rangkap dua terdapat pada molekul...",
+    opsi: ["H₂", "Cl₂", "O₂", "N₂", "HCl"], jawab: 2 },
+  { q: "Ikatan kovalen koordinasi adalah ikatan yang terjadi apabila...",
+    opsi: ["Dua atom saling berbagi satu elektron", "Pasangan elektron berasal dari satu atom saja", "Terjadi tarik-menarik ion positif dan negatif", "Elektron valensi bebas bergerak", "Terbentuk gaya London"], jawab: 1 },
+  { q: "Contoh senyawa yang mengandung ikatan kovalen koordinasi adalah...",
+    opsi: ["NaCl", "H₂O", "NH₄⁺", "MgCl₂", "KBr"], jawab: 2 },
+  { q: "Sifat fisis senyawa ion umumnya adalah...",
+    opsi: ["Titik leleh rendah dan tidak menghantarkan listrik", "Titik leleh tinggi dan menghantarkan listrik dalam bentuk larutan/lelehan", "Titik didih rendah dan mudah menguap", "Tidak larut dalam air", "Bersifat konduktor dalam wujud padat"], jawab: 1 },
+  { q: "Ikatan logam dijelaskan dengan model...",
+    opsi: ["Pasangan elektron bersama", "Lautan elektron", "Serah-terima elektron", "Gaya dipol-dipol", "Ikatan hidrogen"], jawab: 1 },
+  { q: "Manakah pasangan senyawa berikut yang keduanya berikatan kovalen?",
+    opsi: ["NaCl dan KCl", "H₂O dan CO₂", "MgO dan CaO", "NaBr dan LiF", "KCl dan CaCl₂"], jawab: 1 },
+  { q: "Gaya tarik-menarik antara molekul polar yang memiliki atom H terikat pada N, O, atau F disebut...",
+    opsi: ["Ikatan ion", "Ikatan kovalen", "Ikatan logam", "Ikatan hidrogen", "Gaya London"], jawab: 3 }
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+  identitas: null,
+  jawaban: {},
+  ragu: {},
+  current: 0,
+  sisaDetik: 0,
+  timerInterval: null,
+  audioCtx: null,
+  mulai: false,
+  selesai: false,
+  dibatalkan: false
+};
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  $(id).classList.add('active');
+};
+
+/* ============================================================
+   AUDIO — Web Audio API (bunyi walau HP silent)
+   ============================================================ */
+function initAudio() {
+  try {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = state.audioCtx.createBuffer(1, 1, 22050);
+    const src = state.audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(state.audioCtx.destination);
+    src.start(0);
+  } catch (e) { console.warn("Audio gagal:", e); }
+}
+
+function putarAlarmKeras() {
+  if (state.audioCtx) {
+    const ctx = state.audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    // Sirene keras selama ~4 detik
+    for (let i = 0; i < 8; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = i % 2 === 0 ? 1000 : 500;
+      gain.gain.setValueAtTime(0, now + i * 0.5);
+      gain.gain.linearRampToValueAtTime(1.0, now + i * 0.5 + 0.05);
+      gain.gain.linearRampToValueAtTime(0, now + i * 0.5 + 0.45);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.5);
+      osc.stop(now + i * 0.5 + 0.5);
+    }
+  }
+  if (navigator.vibrate) navigator.vibrate([800, 200, 800, 200, 800, 200, 800]);
+}
+
+/* ============================================================
+   CEK APAKAH SUDAH PERNAH UJIAN
+   ============================================================ */
+(function cekRiwayat() {
+  const riwayat = localStorage.getItem(KEY_RIWAYAT);
+  if (riwayat) {
+    const data = JSON.parse(riwayat);
+    show('page-identitas');
+    document.querySelector('#page-identitas .card').innerHTML = `
+      <div class="card-header">
+        <div class="card-icon">🔒</div>
+        <h1>Ujian Sudah Selesai</h1>
+        <p class="subtitle">Anda telah menyelesaikan ujian ini.</p>
+      </div>
+      <div class="hasil-row"><span>Nama</span><strong>${data.nama || '-'}</strong></div>
+      <div class="hasil-row"><span>Kelas</span><strong>${data.kelas || '-'}</strong></div>
+      <div class="hasil-row"><span>Status</span><strong style="color:var(--danger)">${data.status}</strong></div>
+      <div class="hasil-row"><span>Nilai</span><strong>${data.nilai}</strong></div>
+      <p class="subtitle" style="margin-top:20px;text-align:center">
+        Ujian tidak dapat diulang. Hubungi pengawas jika ada kesalahan.
+      </p>
+    `;
+  }
+})();
+
+/* ============================================================
+   MULAI UJIAN
+   ============================================================ */
+$('btn-mulai').addEventListener('click', () => {
+  if (localStorage.getItem(KEY_RIWAYAT)) {
+    alert("Ujian sudah pernah diselesaikan dan tidak dapat diulang.");
+    return;
+  }
+
+  const nama = $('input-nama').value.trim();
+  const kelas = $('input-kelas').value.trim();
+  const absen = $('input-absen').value.trim();
+
+  if (nama.length < 3) return ($('err-identitas').textContent = "Nama minimal 3 karakter.");
+  if (kelas.length < 1) return ($('err-identitas').textContent = "Kelas wajib diisi.");
+
+  state.identitas = { nama, kelas, absen };
+  $('err-identitas').textContent = '';
+  initAudio();
+  mulaiUjian();
+});
+
+function mulaiUjian() {
+  state.mulai = true;
+  state.selesai = false;
+  state.dibatalkan = false;
+  state.jawaban = {};
+  state.ragu = {};
+  state.current = 0;
+  state.sisaDetik = CONFIG.durasiUjianMenit * 60;
+
+  $('exam-nama').textContent = state.identitas.nama;
+  $('exam-kelas').textContent = state.identitas.kelas;
+  $('total-soal').textContent = SOAL.length;
+  $('total-soal-2').textContent = SOAL.length;
+
+  show('page-ujian');
+  renderSoal();
+  renderNav();
+  startTimer();
+  aktifkanAntiCurang();
+}
+
+/* ============================================================
+   RENDER SOAL — hanya soal saat ini, tidak bisa diubah setelah maju
+   ============================================================ */
+function renderSoal() {
+  const s = SOAL[state.current];
+  $('nomor-soal').textContent = state.current + 1;
+  $('teks-soal').textContent = s.q;
+
+  const wrap = $('pilihan');
+  wrap.innerHTML = '';
+  s.opsi.forEach((opsi, i) => {
+    const label = document.createElement('label');
+    const sudahDijawab = state.jawaban[state.current] !== undefined;
+    if (state.jawaban[state.current] === i) label.classList.add('selected');
+    if (sudahDijawab) label.classList.add('locked');
+
+    label.innerHTML = `
+      <input type="radio" name="opsi" value="${i}" ${state.jawaban[state.current] === i ? 'checked' : ''} ${sudahDijawab ? 'disabled' : ''} />
+      <span><strong>${String.fromCharCode(65 + i)}.</strong> ${opsi}</span>
+    `;
+    label.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (sudahDijawab) return;
+      pilihJawaban(i);
+    });
+    wrap.appendChild(label);
+  });
+
+  $('btn-ragu').textContent = state.ragu[state.current] ? "⚑ Hapus Ragu" : "⚑ Ragu";
+  $('btn-next').textContent = state.current === SOAL.length - 1
+    ? "Selesai ✓"
+    : "Selanjutnya →";
+}
+
+function pilihJawaban(i) {
+  state.jawaban[state.current] = i;
+  renderSoal();
+  renderNav();
+}
+
+function renderNav() {
+  const nav = $('nav-soal');
+  nav.innerHTML = '';
+  SOAL.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'nav-btn';
+    if (i === state.current) btn.classList.add('current');
+    else if (i < state.current) {
+      // Soal lampau tidak bisa diklik, hanya menampilkan status
+      if (state.jawaban[i] !== undefined) btn.classList.add('answered');
+      btn.classList.add('locked');
+    } else {
+      if (state.jawaban[i] !== undefined) btn.classList.add('answered');
+      btn.classList.add('locked');
+    }
+    btn.textContent = i + 1;
+    nav.appendChild(btn);
+  });
+  updateProgress();
+}
+
+function updateProgress() {
+  const terjawab = Object.keys(state.jawaban).length;
+  $('progress-text').textContent = terjawab;
+  $('progress-fill').style.width = (terjawab / SOAL.length * 100) + '%';
+}
+
+/* ============================================================
+   NEXT & SELESAI — tanpa tombol PREV
+   ============================================================ */
+$('btn-next').addEventListener('click', () => {
+  if (state.jawaban[state.current] === undefined) {
+    if (!confirm("Anda belum menjawab soal ini. Lanjut ke soal berikutnya?")) return;
+  }
+  if (state.current < SOAL.length - 1) {
+    state.current++;
+    renderSoal();
+    renderNav();
+  } else {
+    if (confirm("Ini soal terakhir. Selesaikan ujian sekarang?")) selesaikanUjian(false);
+  }
+});
+
+$('btn-ragu').addEventListener('click', () => {
+  state.ragu[state.current] = !state.ragu[state.current];
+  renderSoal();
+  renderNav();
+});
+
+$('btn-selesai').addEventListener('click', () => {
+  const belum = SOAL.length - Object.keys(state.jawaban).length;
+  const msg = belum > 0
+    ? `Masih ada ${belum} soal belum dijawab. Yakin selesai?`
+    : "Yakin ingin menyelesaikan ujian?";
+  if (confirm(msg)) selesaikanUjian(false);
+});
+
+/* ============================================================
+   TIMER
+   ============================================================ */
+function startTimer() {
+  updateTimerUI();
+  state.timerInterval = setInterval(() => {
+    state.sisaDetik--;
+    if (state.sisaDetik <= 0) {
+      clearInterval(state.timerInterval);
+      selesaikanUjian(true);
+      return;
+    }
+    updateTimerUI();
+  }, 1000);
+}
+
+function updateTimerUI() {
+  const m = Math.floor(state.sisaDetik / 60).toString().padStart(2, '0');
+  const s = (state.sisaDetik % 60).toString().padStart(2, '0');
+  $('timer').textContent = `${m}:${s}`;
+  $('timer').classList.toggle('warning', state.sisaDetik <= 300);
+}
+
+/* ============================================================
+   ANTI-KECURANGAN
+   ============================================================ */
+let antiCurangAktif = false;
+
+function aktifkanAntiCurang() {
+  if (antiCurangAktif) return;
+  antiCurangAktif = true;
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('blur', onBlur);
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+
+  // Blokir context menu, copy, paste
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('copy', (e) => e.preventDefault());
+  document.addEventListener('paste', (e) => e.preventDefault());
+
+  // Coba masuk fullscreen (diperlukan izin gesture, sudah di-trigger saat klik Mulai)
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+
+function onVisibilityChange() {
+  if (document.hidden && state.mulai && !state.selesai) {
+    curang("Berpindah tab / aplikasi lain");
+  }
+}
+
+function onBlur() {
+  if (!state.mulai || state.selesai) return;
+  setTimeout(() => {
+    if (document.hidden) return; // sudah ditangani visibilitychange
+    if (!state.mulai || state.selesai) return;
+    curang("Jendela ujian kehilangan fokus / ada notifikasi");
+  }, 300);
+}
+
+function onFullscreenChange() {
+  if (!document.fullscreenElement && state.mulai && !state.selesai) {
+    curang("Keluar dari mode fullscreen");
+  }
+}
+
+/* ============================================================
+   CURANG → SIMPAN OTOMATIS → BATALKAN PERMANEN
+   ============================================================ */
+function curang(alasan) {
+  if (state.selesai) return;
+  state.selesai = true;
+  state.dibatalkan = true;
+  state.mulai = false;
+  clearInterval(state.timerInterval);
+
+  // 1. Bunyikan alarm keras (Web Audio API)
+  putarAlarmKeras();
+
+  // 2. Simpan otomatis jawaban + status curang
+  simpanRiwayat("DIBATALKAN", 0);
+
+  // 3. Lepas listener
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  window.removeEventListener('blur', onBlur);
+  document.removeEventListener('fullscreenchange', onFullscreenChange);
+
+  // 4. Tampilkan layar merah
+  $('batal-alasan').textContent = "Pelanggaran: " + alasan;
+  $('overlay-batal').classList.remove('hidden');
+}
+
+/* ============================================================
+   SIMPAN RIWAYAT & TUTUP PERMANEN
+   ============================================================ */
+function simpanRiwayat(status, nilai) {
+  const data = {
+    nama: state.identitas?.nama || '-',
+    kelas: state.identitas?.kelas || '-',
+    absen: state.identitas?.absen || '-',
+    status,
+    nilai,
+    jawaban: state.jawaban,
+    waktu: new Date().toISOString()
+  };
+  localStorage.setItem(KEY_RIWAYAT, JSON.stringify(data));
+}
+
+/* ============================================================
+   SELESAI & HASIL
+   ============================================================ */
+function selesaikanUjian(waktuHabis = false) {
+  if (state.selesai) return;
+  state.selesai = true;
+  state.mulai = false;
+  clearInterval(state.timerInterval);
+
+  let benar = 0;
+  SOAL.forEach((s, i) => { if (state.jawaban[i] === s.jawab) benar++; });
+  const salah = SOAL.length - benar;
+  const nilai = Math.round((benar / SOAL.length) * 100);
+
+  simpanRiwayat("SELESAI", nilai);
+
+  $('hasil-title').textContent = waktuHabis ? "⏰ Waktu Habis" : "✅ Ujian Selesai";
+
+  let html = `
+    <div class="hasil-row"><span>Nama</span><strong>${state.identitas.nama}</strong></div>
+    <div class="hasil-row"><span>Kelas</span><strong>${state.identitas.kelas}</strong></div>
+    <div class="hasil-row"><span>Jawaban Benar</span><strong style="color:var(--success)">${benar}</strong></div>
+    <div class="hasil-row"><span>Jawaban Salah</span><strong style="color:var(--danger)">${salah}</strong></div>
+    <div class="hasil-row"><span>Nilai</span><strong style="font-size:22px;color:var(--biru-600)">${nilai}</strong></div>
+    <div class="hasil-row"><span>Status</span><strong style="color:var(--success)">SELESAI</strong></div>
+    <p class="subtitle" style="margin-top:20px;text-align:center">
+      Ujian telah selesai dan tidak dapat diulang.
+    </p>
+  `;
+
+  $('hasil-content').innerHTML = html;
+  show('page-hasil');
+}
+</script>
+</body>
+</html>
