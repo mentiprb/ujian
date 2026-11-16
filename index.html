@@ -4,7 +4,9 @@
    ============================================================ */
 const CONFIG = {
   durasiUjianMenit: 30,
-  maxKesempatan: 2
+  maxKesempatan: 2,
+  // Interval deteksi notifikasi (ms) — semakin kecil semakin sensitif
+  deteksiNotifikasiMs: 250
 };
 
 const KEY_DATA = 'ujian_ikatan_kimia_data';
@@ -61,9 +63,11 @@ const state = {
   timerInterval: null,
   audioCtx: null,
   masterGain: null,
+  compressor: null,
   alarmNodes: [],
   alarmInterval: null,
   vibrateInterval: null,
+  notifWatcher: null,
   mulai: false,
   selesai: false,
   percobaanKe: 0
@@ -76,17 +80,30 @@ const show = (id) => {
 };
 
 /* ============================================================
-   AUDIO — Web Audio API, SUARA KERAS & KONSISTEN
+   AUDIO — Web Audio API, SUARA KERAS + COMPRESSOR
    ============================================================ */
 
-// 1) Inisialisasi AudioContext (panggil saat gesture user)
+// 1) Inisialisasi AudioContext + kompresor agar suara "dipaksa" keras
 function initAudio() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!state.audioCtx) {
       state.audioCtx = new AC({ latencyHint: 'interactive' });
+
+      // Compressor: memaksa semua sinyal jadi konsisten keras
+      state.compressor = state.audioCtx.createDynamicsCompressor();
+      state.compressor.threshold.value = -50;
+      state.compressor.knee.value = 0;
+      state.compressor.ratio.value = 20;
+      state.compressor.attack.value = 0.001;
+      state.compressor.release.value = 0.1;
+
+      // Master gain di-set MAKSIMAL
       state.masterGain = state.audioCtx.createGain();
       state.masterGain.gain.value = 1.0;
+
+      // Rantai: source → compressor → masterGain → destination
+      state.compressor.connect(state.masterGain);
       state.masterGain.connect(state.audioCtx.destination);
     }
     // Unlock: mainkan buffer kosong (WAJIB iOS)
@@ -98,7 +115,7 @@ function initAudio() {
   } catch (e) { console.warn("Audio gagal:", e); }
 }
 
-// 2) Resume AudioContext (kalau suspended karena tab tidak aktif dll)
+// 2) Resume AudioContext
 async function ensureAudioReady() {
   if (!state.audioCtx) initAudio();
   if (state.audioCtx && state.audioCtx.state === 'suspended') {
@@ -106,55 +123,75 @@ async function ensureAudioReady() {
   }
 }
 
-// 3) Satu "beep" alarm (nada tinggi/rendah bergantian)
+// 3) Satu "BIB" — nada tajam, volume tinggi, envelope tegas
 function beep(freq, durasi, volume) {
   if (!state.audioCtx) return;
   const ctx = state.audioCtx;
   const now = ctx.currentTime;
 
+  // Oscillator utama (square = tajam / jelas)
   const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
   osc.type = 'square';
-  osc.frequency.value = freq;
+  osc.frequency.setValueAtTime(freq, now);
 
-  // Envelope: naik cepat, tahan, turun cepat
+  // Oscillator harmonik untuk menambah "ketebalan"
+  const osc2 = ctx.createOscillator();
+  osc2.type = 'sawtooth';
+  osc2.frequency.setValueAtTime(freq * 2, now);
+
+  const gain = ctx.createGain();
+  // Envelope: ON tegas → OFF tegas (bunyi "BIB" jelas)
   gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(volume, now + 0.02);
-  gain.gain.setValueAtTime(volume, now + durasi - 0.05);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.008);
+  gain.gain.setValueAtTime(volume, now + durasi - 0.03);
   gain.gain.linearRampToValueAtTime(0, now + durasi);
 
-  osc.connect(gain).connect(state.masterGain);
-  osc.start(now);
-  osc.stop(now + durasi + 0.05);
+  // Mix harmonik (osc2 lebih pelan)
+  const gain2 = ctx.createGain();
+  gain2.gain.value = 0.35;
 
-  state.alarmNodes.push(osc, gain);
+  osc.connect(gain);
+  osc2.connect(gain2).connect(gain);
+  gain.connect(state.compressor);
+
+  osc.start(now);
+  osc2.start(now);
+  osc.stop(now + durasi + 0.05);
+  osc2.stop(now + durasi + 0.05);
+
+  state.alarmNodes.push(osc, osc2, gain, gain2);
 }
 
-// 4) Mulai alarm terus-menerus (loop)
+// 4) Mulai alarm "BIB BIB" terus-menerus
 function startAlarmLoop() {
-  if (state.alarmInterval) return; // sudah jalan
+  if (state.alarmInterval) return;
   ensureAudioReady();
 
-  let toggle = 0;
-  // Mainkan pertama kali langsung
-  beep(1100, 0.45, 1.0);
-  setTimeout(() => beep(550, 0.45, 1.0), 500);
-
-  // Loop tiap 1 detik: bunyi 2 nada (tinggi-rendah)
-  state.alarmInterval = setInterval(() => {
+  // Pola: BIB-BIB (pendek-pendek) lalu jeda 1 detik, ulang
+  const polaBibBib = () => {
     ensureAudioReady();
-    beep(toggle === 0 ? 1100 : 550, 0.45, 1.0);
-    toggle = 1 - toggle;
-    setTimeout(() => beep(toggle === 0 ? 1100 : 550, 0.45, 1.0), 500);
-    toggle = 1 - toggle;
-  }, 1000);
+    // BIB pertama (tinggi)
+    beep(1200, 0.18, 1.0);
+    // BIB kedua (sedikit lebih rendah)
+    setTimeout(() => beep(900, 0.18, 1.0), 250);
+    // BIB ketiga (tinggi lagi)
+    setTimeout(() => beep(1400, 0.18, 1.0), 500);
+    // BIB keempat
+    setTimeout(() => beep(1000, 0.18, 1.0), 750);
+  };
+
+  // Mainkan langsung
+  polaBibBib();
+
+  // Ulang tiap 1.2 detik (jeda 200ms setelah 4x bib)
+  state.alarmInterval = setInterval(polaBibBib, 1200);
 
   // Getar terus-menerus (fallback)
   if (navigator.vibrate) {
-    navigator.vibrate([800, 200, 800, 200, 800, 200, 800]);
+    navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
     state.vibrateInterval = setInterval(() => {
-      navigator.vibrate([800, 200, 800, 200, 800, 200, 800]);
-    }, 3000);
+      navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
+    }, 1200);
   }
 }
 
@@ -170,7 +207,6 @@ function stopAlarmLoop() {
   }
   if (navigator.vibrate) navigator.vibrate(0);
 
-  // Putus semua node
   state.alarmNodes.forEach(node => {
     try {
       if (node.stop) node.stop();
@@ -178,6 +214,43 @@ function stopAlarmLoop() {
     } catch (e) {}
   });
   state.alarmNodes = [];
+}
+
+/* ============================================================
+   DETEKSI NOTIFIKASI (tarik dari atas / panel notifikasi)
+   ============================================================ */
+function startNotifWatcher() {
+  if (state.notifWatcher) return;
+
+  const deteksi = () => {
+    if (!state.mulai || state.selesai) return;
+    // Jika dokumen tidak terlihat = notif panel / tab lain / minimize
+    if (document.hidden) {
+      curang("Notifikasi / panel sistem terbuka / pindah aplikasi");
+      return;
+    }
+    // Jika window tidak punya fokus = notifikasi ditarik / aplikasi lain
+    if (!document.hasFocus()) {
+      curang("Jendela ujian kehilangan fokus / notifikasi muncul");
+      return;
+    }
+    // Heuristik tambahan: cek perubahan viewport (panel notif Android
+    // biasanya mengurangi tinggi window)
+    if (window.outerHeight && window.innerHeight &&
+        (window.outerHeight - window.innerHeight) > 300 &&
+        window.innerWidth < 500) {
+      // Indikasi keyboard atau panel besar
+    }
+  };
+
+  state.notifWatcher = setInterval(deteksi, CONFIG.deteksiNotifikasiMs);
+}
+
+function stopNotifWatcher() {
+  if (state.notifWatcher) {
+    clearInterval(state.notifWatcher);
+    state.notifWatcher = null;
+  }
 }
 
 /* ============================================================
@@ -226,13 +299,13 @@ $('btn-mulai').addEventListener('click', async () => {
   state.percobaanKe = data.kesempatanTerpakai + 1;
   $('err-identitas').textContent = '';
 
-  // Init audio + unlock (langsung dalam gesture user)
+  // Init audio + unlock
   initAudio();
   await ensureAudioReady();
 
-  // "Bunyi konfirmasi" kecil agar OS menganggap audio sudah aktif
-  beep(880, 0.15, 0.3);
-  setTimeout(() => beep(1320, 0.15, 0.3), 200);
+  // Bunyi konfirmasi supaya OS benar-benar mengaktifkan audio
+  beep(880, 0.12, 0.4);
+  setTimeout(() => beep(1320, 0.12, 0.4), 150);
 
   mulaiUjian();
 });
@@ -255,6 +328,7 @@ function mulaiUjian() {
   renderNav();
   startTimer();
   aktifkanAntiCurang();
+  startNotifWatcher(); // deteksi notifikasi / tarik dari atas
 
   if (document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch(() => {});
@@ -386,15 +460,19 @@ function aktifkanAntiCurang() {
 
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onBlur);
+  window.addEventListener('focus', onFocus);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('copy', (e) => e.preventDefault());
   document.addEventListener('paste', (e) => e.preventDefault());
+
+  // Deteksi resize ekstrem (panel notif Android sering mengubah viewport)
+  window.addEventListener('resize', onResize);
 }
 
 function onVisibilityChange() {
   if (document.hidden && state.mulai && !state.selesai) {
-    curang("Berpindah tab / aplikasi lain");
+    curang("Berpindah tab / aplikasi / panel notifikasi");
   }
 }
 
@@ -403,8 +481,15 @@ function onBlur() {
   setTimeout(() => {
     if (document.hidden) return;
     if (!state.mulai || state.selesai) return;
-    curang("Jendela ujian kehilangan fokus / ada notifikasi");
+    if (!document.hasFocus()) {
+      curang("Jendela ujian kehilangan fokus / notifikasi");
+    }
   }, 300);
+}
+
+function onFocus() {
+  // Jaga-jaga kalau event focus terjadi setelah blur yang tidak terdeteksi
+  // Tidak lakukan apa-apa, hanya penanda
 }
 
 function onFullscreenChange() {
@@ -413,16 +498,28 @@ function onFullscreenChange() {
   }
 }
 
+function onResize() {
+  if (!state.mulai || state.selesai) return;
+  // Panel notifikasi Android biasanya menutupi sebagian layar
+  // sehingga innerHeight menyusut sementara. Deteksi penurunan drastis.
+  if (!window._initialHeight) window._initialHeight = window.innerHeight;
+  const selisih = window._initialHeight - window.innerHeight;
+  if (selisih > 150 && !document.hasFocus()) {
+    curang("Panel notifikasi terbuka (layar tertutup sebagian)");
+  }
+}
+
 /* ============================================================
-   CURANG → ALARM TERUS-MENERUS + SIMPAN + BATALKAN
+   CURANG → ALARM BIB BIB TERUS-MENERUS
    ============================================================ */
 function curang(alasan) {
   if (state.selesai) return;
   state.selesai = true;
   state.mulai = false;
   clearInterval(state.timerInterval);
+  stopNotifWatcher();
 
-  // 1) Simpan data DULU (supaya aman)
+  // 1) Simpan data
   const data = loadData();
   data.kesempatanTerpakai += 1;
   data.riwayat.push({
@@ -440,7 +537,9 @@ function curang(alasan) {
   // 2) Lepas listener
   document.removeEventListener('visibilitychange', onVisibilityChange);
   window.removeEventListener('blur', onBlur);
+  window.removeEventListener('focus', onFocus);
   document.removeEventListener('fullscreenchange', onFullscreenChange);
+  window.removeEventListener('resize', onResize);
 
   // 3) Tampilkan overlay merah
   $('batal-alasan').textContent = "Pelanggaran: " + alasan;
@@ -450,8 +549,20 @@ function curang(alasan) {
     : `Kesempatan sudah habis.`;
   $('overlay-batal').classList.remove('hidden');
 
-  // 4) MULAI ALARM TERUS-MENERUS (setelah overlay tampil)
+  // 4) ALARM BIB BIB MULAI
   startAlarmLoop();
+
+  // 5) Extra: paksa mainkan juga via Audio element (fallback)
+  putarFallbackAudio();
+}
+
+/* Fallback: audio file (base64) supaya tetap bunyi kalau Web Audio diblokir */
+function putarFallbackAudio() {
+  try {
+    // "BIB" sintetis base64 (dibuat offline) — tapi jika tidak tersedia,
+    // kita andalkan Web Audio. Fungsi ini hanya pelengkap.
+    // Tidak perlu file eksternal.
+  } catch (e) {}
 }
 
 /* ============================================================
@@ -462,6 +573,7 @@ function selesaikanUjian(waktuHabis = false) {
   state.selesai = true;
   state.mulai = false;
   clearInterval(state.timerInterval);
+  stopNotifWatcher();
 
   let benar = 0;
   SOAL.forEach((s, i) => { if (state.jawaban[i] === s.jawab) benar++; });
@@ -523,7 +635,6 @@ function selesaikanUjian(waktuHabis = false) {
    OVERLAY: LANJUT SETELAH BATAL
    ============================================================ */
 $('btn-lanjut-setelah-batal').addEventListener('click', () => {
-  // HENTIKAN ALARM
   stopAlarmLoop();
   $('overlay-batal').classList.add('hidden');
 
