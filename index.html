@@ -1,3 +1,447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ujian Ikatan Kimia</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --biru-50:  #eef6ff;
+  --biru-100: #dbeafe;
+  --biru-200: #bfdbfe;
+  --biru-300: #93c5fd;
+  --biru-400: #60a5fa;
+  --biru-500: #3b82f6;
+  --biru-600: #2563eb;
+  --kuning-50:  #fffbea;
+  --kuning-100: #fef9c3;
+  --kuning-200: #fef08a;
+  --kuning-300: #fde047;
+  --kuning-400: #facc15;
+  --putih: #ffffff;
+  --bg:    #f7fbff;
+  --text:  #1e293b;
+  --text-soft: #64748b;
+  --danger: #ef4444;
+  --danger-bg: #fee2e2;
+  --success: #22c55e;
+  --success-bg: #dcfce7;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, var(--kuning-100) 0%, transparent 40%),
+    radial-gradient(circle at 90% 100%, var(--biru-100) 0%, transparent 45%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+#app { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+
+.page { display: none; }
+.page.active { display: block; animation: fadeIn .35s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.card {
+  background: var(--putih);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 6px 24px rgba(37, 99, 235, .08), 0 1px 3px rgba(0,0,0,.04);
+  margin-bottom: 16px;
+  border: 2px solid var(--biru-100);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--kuning-300), var(--biru-300), var(--kuning-300));
+}
+.card-header { text-align: center; margin-bottom: 24px; }
+.card-icon { font-size: 42px; margin-bottom: 8px; filter: drop-shadow(0 4px 8px rgba(37,99,235,.2)); }
+.card-header h1 { font-size: 24px; margin-bottom: 6px; color: var(--biru-600); }
+h1 { font-size: 22px; margin-bottom: 6px; color: var(--biru-600); }
+.subtitle { color: var(--text-soft); font-size: 14px; }
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 14px 0 6px;
+  color: var(--biru-600);
+}
+input[type="text"], input[type="number"] {
+  width: 100%;
+  padding: 13px 16px;
+  border: 2px solid var(--biru-100);
+  border-radius: 12px;
+  font-size: 15px;
+  background: var(--biru-50);
+  transition: all .2s;
+  color: var(--text);
+  font-family: inherit;
+}
+input::placeholder { color: #94a3b8; }
+input:focus {
+  outline: none;
+  border-color: var(--kuning-400);
+  background: var(--kuning-50);
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, .15);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  transition: transform .12s, box-shadow .2s;
+  margin-top: 16px;
+  font-family: inherit;
+}
+button:active { transform: scale(.97); }
+button:disabled { opacity: .35; cursor: not-allowed; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--biru-400), var(--biru-600));
+  color: #fff;
+  width: 100%;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, .35);
+}
+.btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(37, 99, 235, .5); }
+
+.btn-secondary {
+  background: var(--putih);
+  color: var(--biru-600);
+  border: 2px solid var(--biru-200);
+}
+.btn-secondary:hover { background: var(--biru-50); }
+
+.btn-warning {
+  background: linear-gradient(135deg, var(--kuning-300), var(--kuning-400));
+  color: #713f12;
+  box-shadow: 0 3px 10px rgba(250, 204, 21, .4);
+}
+.btn-warning:hover { box-shadow: 0 5px 16px rgba(250, 204, 21, .55); }
+
+.btn-danger {
+  background: linear-gradient(135deg, #f87171, var(--danger));
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, .35);
+}
+.btn-danger:hover { box-shadow: 0 6px 20px rgba(239, 68, 68, .5); }
+
+.full { width: 100%; }
+.error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; font-weight: 600; }
+
+.exam-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, var(--biru-500), var(--biru-600));
+  padding: 16px 20px;
+  border-radius: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, .3);
+  color: #fff;
+}
+.exam-info { display: flex; flex-direction: column; font-size: 13px; }
+.exam-info strong { font-size: 16px; }
+.exam-info span { opacity: .85; }
+
+.timer-box {
+  text-align: right;
+  background: rgba(255,255,255,.18);
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+.timer-label { display: block; font-size: 11px; opacity: .9; text-transform: uppercase; letter-spacing: .5px; }
+.timer {
+  font-size: 26px;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  color: var(--kuning-200);
+  text-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.timer.warning { animation: pulse 1s infinite; color: #fecaca; }
+@keyframes pulse { 50% { opacity: .5; } }
+
+.progress-bar {
+  height: 10px;
+  background: var(--biru-100);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--kuning-300), var(--biru-400));
+  border-radius: 99px;
+  transition: width .35s ease;
+}
+.progress-text {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-bottom: 14px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.soal-card { padding: 22px; }
+.soal-nomor {
+  font-size: 13px;
+  color: var(--biru-600);
+  margin-bottom: 12px;
+  font-weight: 700;
+  background: var(--biru-50);
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 99px;
+}
+.soal-text { font-size: 16px; margin-bottom: 20px; line-height: 1.65; }
+
+.pilihan { display: flex; flex-direction: column; gap: 12px; }
+.pilihan label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 2px solid var(--biru-100);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all .18s;
+  font-weight: 500;
+  font-size: 15px;
+  background: var(--putih);
+  margin: 0;
+  color: var(--text);
+}
+.pilihan label:hover { border-color: var(--kuning-300); background: var(--kuning-50); }
+.pilihan label.selected {
+  border-color: var(--biru-500);
+  background: linear-gradient(135deg, var(--biru-50), var(--kuning-50));
+  box-shadow: 0 3px 12px rgba(37, 99, 235, .18);
+}
+.pilihan label.selected span strong { color: var(--biru-600); }
+.pilihan label.locked { cursor: not-allowed; opacity: .75; }
+.pilihan input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border: 2px solid var(--biru-200);
+  border-radius: 50%;
+  margin-top: 2px;
+  flex-shrink: 0;
+  position: relative;
+  transition: all .15s;
+  background: var(--putih);
+}
+.pilihan input[type="radio"]:checked {
+  border-color: var(--biru-600);
+  background: var(--biru-600);
+}
+.pilihan input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+.pilihan span strong { color: var(--biru-500); margin-right: 4px; }
+
+.nav-soal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+  background: var(--putih);
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid var(--biru-100);
+}
+.nav-btn {
+  padding: 9px 0;
+  font-size: 13px;
+  font-weight: 800;
+  border: 2px solid var(--biru-100);
+  background: var(--biru-50);
+  color: var(--biru-600);
+  border-radius: 10px;
+  margin: 0;
+  transition: all .15s;
+}
+.nav-btn.current {
+  border-color: var(--biru-600);
+  background: linear-gradient(135deg, var(--biru-500), var(--biru-600));
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, .4);
+}
+.nav-btn.answered { background: var(--success-bg); border-color: var(--success); color: #166534; }
+.nav-btn.locked { background: #e2e8f0; border-color: #cbd5e1; color: #94a3b8; cursor: not-allowed; }
+
+.exam-actions { display: flex; gap: 10px; margin-bottom: 10px; }
+.exam-actions button { flex: 1; margin: 0; font-size: 14px; padding: 13px 10px; }
+
+#hasil-content { margin: 22px 0; }
+.hasil-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 4px;
+  border-bottom: 2px dashed var(--biru-100);
+  font-size: 15px;
+}
+.hasil-row:last-child { border-bottom: none; }
+.hasil-row span { color: var(--text-soft); font-weight: 500; }
+.hasil-row strong { font-weight: 800; color: var(--text); }
+
+.kesempatan-info {
+  background: linear-gradient(135deg, var(--kuning-50), var(--biru-50));
+  border: 2px dashed var(--kuning-300);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 16px 0;
+  text-align: center;
+  font-size: 14px;
+}
+.kesempatan-info strong { color: var(--biru-600); font-size: 18px; }
+
+.overlay-batal {
+  position: fixed;
+  inset: 0;
+  background: var(--danger);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 24px;
+  animation: flashRed .6s infinite alternate;
+}
+.overlay-batal.hidden { display: none; }
+@keyframes flashRed { from { background: #ef4444; } to { background: #991b1b; } }
+.batal-content {
+  max-width: 500px;
+  background: rgba(0,0,0,.18);
+  padding: 40px 28px;
+  border-radius: 24px;
+  border: 3px solid rgba(255,255,255,.35);
+}
+.batal-content h1 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: #fff;
+  animation: shake .5s;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+.batal-content p { font-size: 16px; margin-bottom: 10px; font-weight: 600; }
+.batal-sub { opacity: .9; font-size: 14px !important; font-weight: 400 !important; }
+.batal-content button { margin-top: 20px; }
+
+@media (max-width: 480px) {
+  .card { padding: 20px; border-radius: 16px; }
+  .card-icon { font-size: 36px; }
+  .timer { font-size: 22px; }
+  .exam-info strong { font-size: 14px; }
+  .exam-header { padding: 12px 16px; }
+  .exam-actions button { font-size: 13px; padding: 12px 8px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== IDENTITAS ===== -->
+  <section id="page-identitas" class="page active">
+    <div class="card" id="card-identitas">
+      <div class="card-header">
+        <div class="card-icon">⚗️</div>
+        <h1>Ujian Ikatan Kimia</h1>
+        <p class="subtitle">Masukkan identitas Anda untuk memulai</p>
+      </div>
+      <label>Nama Lengkap</label>
+      <input type="text" id="input-nama" placeholder="Contoh: Budi Santoso" autocomplete="off" />
+      <label>Kelas</label>
+      <input type="text" id="input-kelas" placeholder="Contoh: X IPA 1" autocomplete="off" />
+      <label>Nomor Absen (opsional)</label>
+      <input type="number" id="input-absen" placeholder="Contoh: 12" />
+      <p id="err-identitas" class="error"></p>
+      <div class="kesempatan-info" id="info-kesempatan">
+        Kesempatan tersisa: <strong>2</strong> dari 2
+      </div>
+      <button id="btn-mulai" class="btn-primary">Mulai Ujian →</button>
+    </div>
+  </section>
+
+  <!-- ===== UJIAN ===== -->
+  <section id="page-ujian" class="page">
+    <header class="exam-header">
+      <div class="exam-info">
+        <strong id="exam-nama"></strong>
+        <span id="exam-kelas"></span>
+      </div>
+      <div class="timer-box">
+        <span class="timer-label">⏱ Sisa Waktu</span>
+        <span id="timer" class="timer">00:00</span>
+      </div>
+    </header>
+
+    <div class="progress-bar"><div id="progress-fill"></div></div>
+    <p class="progress-text"><span id="progress-text">0</span> dari <span id="total-soal">10</span> soal terjawab</p>
+
+    <div class="card soal-card">
+      <div class="soal-nomor">Soal <span id="nomor-soal">1</span> / <span id="total-soal-2">10</span></div>
+      <p id="teks-soal" class="soal-text"></p>
+      <div id="pilihan" class="pilihan"></div>
+    </div>
+
+    <div class="nav-soal" id="nav-soal"></div>
+
+    <div class="exam-actions">
+      <button id="btn-ragu" class="btn-warning">⚑ Ragu</button>
+      <button id="btn-next" class="btn-primary">Selanjutnya →</button>
+    </div>
+    <button id="btn-selesai" class="btn-danger full">✓ Selesai Ujian</button>
+  </section>
+
+  <!-- ===== HASIL ===== -->
+  <section id="page-hasil" class="page">
+    <div class="card">
+      <h1 id="hasil-title">✅ Ujian Selesai</h1>
+      <div id="hasil-content"></div>
+    </div>
+  </section>
+
+  <!-- ===== OVERLAY PELANGGARAN ===== -->
+  <div id="overlay-batal" class="overlay-batal hidden">
+    <div class="batal-content">
+      <h1>⚠️ UJIAN DIBATALKAN ⚠️</h1>
+      <p id="batal-alasan">Kecurangan terdeteksi.</p>
+      <p class="batal-sub">Jawaban Anda telah otomatis disimpan.</p>
+      <p class="batal-sub" id="batal-info-kesempatan"></p>
+      <button id="btn-lanjut-setelah-batal" class="btn-secondary">Lanjut</button>
+    </div>
+  </div>
+
+</div>
+
 <script>
 /* ============================================================
    KONFIGURASI
@@ -5,7 +449,6 @@
 const CONFIG = {
   durasiUjianMenit: 30,
   maxKesempatan: 2,
-  // Interval deteksi notifikasi (ms) — semakin kecil semakin sensitif
   deteksiNotifikasiMs: 250
 };
 
@@ -37,9 +480,6 @@ const SOAL = [
     opsi: ["Ikatan ion", "Ikatan kovalen", "Ikatan logam", "Ikatan hidrogen", "Gaya London"], jawab: 3 }
 ];
 
-/* ============================================================
-   DATA TERSIMPAN
-   ============================================================ */
 function loadData() {
   try {
     const raw = localStorage.getItem(KEY_DATA);
@@ -80,17 +520,15 @@ const show = (id) => {
 };
 
 /* ============================================================
-   AUDIO — Web Audio API, SUARA KERAS + COMPRESSOR
+   AUDIO — Web Audio API
    ============================================================ */
-
-// 1) Inisialisasi AudioContext + kompresor agar suara "dipaksa" keras
 function initAudio() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!state.audioCtx) {
       state.audioCtx = new AC({ latencyHint: 'interactive' });
 
-      // Compressor: memaksa semua sinyal jadi konsisten keras
+      // Kompresor: paksa semua sinyal jadi keras konsisten
       state.compressor = state.audioCtx.createDynamicsCompressor();
       state.compressor.threshold.value = -50;
       state.compressor.knee.value = 0;
@@ -98,15 +536,13 @@ function initAudio() {
       state.compressor.attack.value = 0.001;
       state.compressor.release.value = 0.1;
 
-      // Master gain di-set MAKSIMAL
       state.masterGain = state.audioCtx.createGain();
       state.masterGain.gain.value = 1.0;
 
-      // Rantai: source → compressor → masterGain → destination
       state.compressor.connect(state.masterGain);
       state.masterGain.connect(state.audioCtx.destination);
     }
-    // Unlock: mainkan buffer kosong (WAJIB iOS)
+    // Unlock iOS
     const buf = state.audioCtx.createBuffer(1, 1, 44100);
     const src = state.audioCtx.createBufferSource();
     src.buffer = buf;
@@ -115,7 +551,6 @@ function initAudio() {
   } catch (e) { console.warn("Audio gagal:", e); }
 }
 
-// 2) Resume AudioContext
 async function ensureAudioReady() {
   if (!state.audioCtx) initAudio();
   if (state.audioCtx && state.audioCtx.state === 'suspended') {
@@ -123,30 +558,25 @@ async function ensureAudioReady() {
   }
 }
 
-// 3) Satu "BIB" — nada tajam, volume tinggi, envelope tegas
 function beep(freq, durasi, volume) {
   if (!state.audioCtx) return;
   const ctx = state.audioCtx;
   const now = ctx.currentTime;
 
-  // Oscillator utama (square = tajam / jelas)
   const osc = ctx.createOscillator();
   osc.type = 'square';
   osc.frequency.setValueAtTime(freq, now);
 
-  // Oscillator harmonik untuk menambah "ketebalan"
   const osc2 = ctx.createOscillator();
   osc2.type = 'sawtooth';
   osc2.frequency.setValueAtTime(freq * 2, now);
 
   const gain = ctx.createGain();
-  // Envelope: ON tegas → OFF tegas (bunyi "BIB" jelas)
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(volume, now + 0.008);
   gain.gain.setValueAtTime(volume, now + durasi - 0.03);
   gain.gain.linearRampToValueAtTime(0, now + durasi);
 
-  // Mix harmonik (osc2 lebih pelan)
   const gain2 = ctx.createGain();
   gain2.gain.value = 0.35;
 
@@ -162,31 +592,21 @@ function beep(freq, durasi, volume) {
   state.alarmNodes.push(osc, osc2, gain, gain2);
 }
 
-// 4) Mulai alarm "BIB BIB" terus-menerus
 function startAlarmLoop() {
   if (state.alarmInterval) return;
   ensureAudioReady();
 
-  // Pola: BIB-BIB (pendek-pendek) lalu jeda 1 detik, ulang
   const polaBibBib = () => {
     ensureAudioReady();
-    // BIB pertama (tinggi)
     beep(1200, 0.18, 1.0);
-    // BIB kedua (sedikit lebih rendah)
     setTimeout(() => beep(900, 0.18, 1.0), 250);
-    // BIB ketiga (tinggi lagi)
     setTimeout(() => beep(1400, 0.18, 1.0), 500);
-    // BIB keempat
     setTimeout(() => beep(1000, 0.18, 1.0), 750);
   };
 
-  // Mainkan langsung
   polaBibBib();
-
-  // Ulang tiap 1.2 detik (jeda 200ms setelah 4x bib)
   state.alarmInterval = setInterval(polaBibBib, 1200);
 
-  // Getar terus-menerus (fallback)
   if (navigator.vibrate) {
     navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
     state.vibrateInterval = setInterval(() => {
@@ -195,7 +615,6 @@ function startAlarmLoop() {
   }
 }
 
-// 5) Hentikan alarm
 function stopAlarmLoop() {
   if (state.alarmInterval) {
     clearInterval(state.alarmInterval);
@@ -221,28 +640,17 @@ function stopAlarmLoop() {
    ============================================================ */
 function startNotifWatcher() {
   if (state.notifWatcher) return;
-
   const deteksi = () => {
     if (!state.mulai || state.selesai) return;
-    // Jika dokumen tidak terlihat = notif panel / tab lain / minimize
     if (document.hidden) {
       curang("Notifikasi / panel sistem terbuka / pindah aplikasi");
       return;
     }
-    // Jika window tidak punya fokus = notifikasi ditarik / aplikasi lain
     if (!document.hasFocus()) {
       curang("Jendela ujian kehilangan fokus / notifikasi muncul");
       return;
     }
-    // Heuristik tambahan: cek perubahan viewport (panel notif Android
-    // biasanya mengurangi tinggi window)
-    if (window.outerHeight && window.innerHeight &&
-        (window.outerHeight - window.innerHeight) > 300 &&
-        window.innerWidth < 500) {
-      // Indikasi keyboard atau panel besar
-    }
   };
-
   state.notifWatcher = setInterval(deteksi, CONFIG.deteksiNotifikasiMs);
 }
 
@@ -299,7 +707,6 @@ $('btn-mulai').addEventListener('click', async () => {
   state.percobaanKe = data.kesempatanTerpakai + 1;
   $('err-identitas').textContent = '';
 
-  // Init audio + unlock
   initAudio();
   await ensureAudioReady();
 
@@ -328,7 +735,7 @@ function mulaiUjian() {
   renderNav();
   startTimer();
   aktifkanAntiCurang();
-  startNotifWatcher(); // deteksi notifikasi / tarik dari atas
+  startNotifWatcher();
 
   if (document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch(() => {});
@@ -460,14 +867,10 @@ function aktifkanAntiCurang() {
 
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onBlur);
-  window.addEventListener('focus', onFocus);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('copy', (e) => e.preventDefault());
   document.addEventListener('paste', (e) => e.preventDefault());
-
-  // Deteksi resize ekstrem (panel notif Android sering mengubah viewport)
-  window.addEventListener('resize', onResize);
 }
 
 function onVisibilityChange() {
@@ -487,30 +890,14 @@ function onBlur() {
   }, 300);
 }
 
-function onFocus() {
-  // Jaga-jaga kalau event focus terjadi setelah blur yang tidak terdeteksi
-  // Tidak lakukan apa-apa, hanya penanda
-}
-
 function onFullscreenChange() {
   if (!document.fullscreenElement && state.mulai && !state.selesai) {
     curang("Keluar dari mode fullscreen");
   }
 }
 
-function onResize() {
-  if (!state.mulai || state.selesai) return;
-  // Panel notifikasi Android biasanya menutupi sebagian layar
-  // sehingga innerHeight menyusut sementara. Deteksi penurunan drastis.
-  if (!window._initialHeight) window._initialHeight = window.innerHeight;
-  const selisih = window._initialHeight - window.innerHeight;
-  if (selisih > 150 && !document.hasFocus()) {
-    curang("Panel notifikasi terbuka (layar tertutup sebagian)");
-  }
-}
-
 /* ============================================================
-   CURANG → ALARM BIB BIB TERUS-MENERUS
+   CURANG → ALARM + SIMPAN + BATALKAN
    ============================================================ */
 function curang(alasan) {
   if (state.selesai) return;
@@ -519,7 +906,6 @@ function curang(alasan) {
   clearInterval(state.timerInterval);
   stopNotifWatcher();
 
-  // 1) Simpan data
   const data = loadData();
   data.kesempatanTerpakai += 1;
   data.riwayat.push({
@@ -534,14 +920,10 @@ function curang(alasan) {
   });
   saveData(data);
 
-  // 2) Lepas listener
   document.removeEventListener('visibilitychange', onVisibilityChange);
   window.removeEventListener('blur', onBlur);
-  window.removeEventListener('focus', onFocus);
   document.removeEventListener('fullscreenchange', onFullscreenChange);
-  window.removeEventListener('resize', onResize);
 
-  // 3) Tampilkan overlay merah
   $('batal-alasan').textContent = "Pelanggaran: " + alasan;
   const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
   $('batal-info-kesempatan').textContent = sisa > 0
@@ -549,20 +931,7 @@ function curang(alasan) {
     : `Kesempatan sudah habis.`;
   $('overlay-batal').classList.remove('hidden');
 
-  // 4) ALARM BIB BIB MULAI
   startAlarmLoop();
-
-  // 5) Extra: paksa mainkan juga via Audio element (fallback)
-  putarFallbackAudio();
-}
-
-/* Fallback: audio file (base64) supaya tetap bunyi kalau Web Audio diblokir */
-function putarFallbackAudio() {
-  try {
-    // "BIB" sintetis base64 (dibuat offline) — tapi jika tidak tersedia,
-    // kita andalkan Web Audio. Fungsi ini hanya pelengkap.
-    // Tidak perlu file eksternal.
-  } catch (e) {}
 }
 
 /* ============================================================
@@ -666,3 +1035,5 @@ $('btn-lanjut-setelah-batal').addEventListener('click', () => {
   }
 });
 </script>
+</body>
+</html>
