@@ -480,6 +480,9 @@ const SOAL = [
     opsi: ["Ikatan ion", "Ikatan kovalen", "Ikatan logam", "Ikatan hidrogen", "Gaya London"], jawab: 3 }
 ];
 
+/* ============================================================
+   DATA TERSIMPAN
+   ============================================================ */
 function loadData() {
   try {
     const raw = localStorage.getItem(KEY_DATA);
@@ -528,13 +531,13 @@ function initAudio() {
     if (!state.audioCtx) {
       state.audioCtx = new AC({ latencyHint: 'interactive' });
 
-      // Kompresor: paksa semua sinyal jadi keras konsisten
+      // Kompresor agresif: paksa sinyal jadi keras konsisten
       state.compressor = state.audioCtx.createDynamicsCompressor();
-      state.compressor.threshold.value = -50;
+      state.compressor.threshold.value = -60;
       state.compressor.knee.value = 0;
-      state.compressor.ratio.value = 20;
-      state.compressor.attack.value = 0.001;
-      state.compressor.release.value = 0.1;
+      state.compressor.ratio.value = 30;
+      state.compressor.attack.value = 0.0005;
+      state.compressor.release.value = 0.05;
 
       state.masterGain = state.audioCtx.createGain();
       state.masterGain.gain.value = 1.0;
@@ -558,60 +561,74 @@ async function ensureAudioReady() {
   }
 }
 
+/* ============================================================
+   ALARM TEGAS — BEEP KERAS BERULANG
+   ============================================================ */
 function beep(freq, durasi, volume) {
   if (!state.audioCtx) return;
   const ctx = state.audioCtx;
   const now = ctx.currentTime;
 
-  const osc = ctx.createOscillator();
-  osc.type = 'square';
-  osc.frequency.setValueAtTime(freq, now);
+  // 3 oscillator sekaligus: square (tajam) + sawtooth (tebal) + triangle (berat)
+  const osc1 = ctx.createOscillator();
+  osc1.type = 'square';
+  osc1.frequency.setValueAtTime(freq, now);
 
   const osc2 = ctx.createOscillator();
   osc2.type = 'sawtooth';
-  osc2.frequency.setValueAtTime(freq * 2, now);
+  osc2.frequency.setValueAtTime(freq * 1.5, now);
 
+  const osc3 = ctx.createOscillator();
+  osc3.type = 'triangle';
+  osc3.frequency.setValueAtTime(freq * 0.5, now);
+
+  const g1 = ctx.createGain(); g1.gain.value = 1.0;
+  const g2 = ctx.createGain(); g2.gain.value = 0.6;
+  const g3 = ctx.createGain(); g3.gain.value = 0.9;
+
+  // Envelope TEGAS: ON instan → OFF instan
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(volume, now + 0.008);
-  gain.gain.setValueAtTime(volume, now + durasi - 0.03);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.003);
+  gain.gain.setValueAtTime(volume, now + durasi - 0.01);
   gain.gain.linearRampToValueAtTime(0, now + durasi);
 
-  const gain2 = ctx.createGain();
-  gain2.gain.value = 0.35;
-
-  osc.connect(gain);
-  osc2.connect(gain2).connect(gain);
+  osc1.connect(g1).connect(gain);
+  osc2.connect(g2).connect(gain);
+  osc3.connect(g3).connect(gain);
   gain.connect(state.compressor);
 
-  osc.start(now);
+  osc1.start(now);
   osc2.start(now);
-  osc.stop(now + durasi + 0.05);
-  osc2.stop(now + durasi + 0.05);
+  osc3.start(now);
+  osc1.stop(now + durasi + 0.02);
+  osc2.stop(now + durasi + 0.02);
+  osc3.stop(now + durasi + 0.02);
 
-  state.alarmNodes.push(osc, osc2, gain, gain2);
+  state.alarmNodes.push(osc1, osc2, osc3, g1, g2, g3, gain);
 }
 
 function startAlarmLoop() {
   if (state.alarmInterval) return;
   ensureAudioReady();
 
-  const polaBibBib = () => {
+  // Pola TEGAS: BEEP tinggi → BEEP tinggi → BEEP rendah → BEEP tinggi
+  const polaTegas = () => {
     ensureAudioReady();
-    beep(1200, 0.18, 1.0);
-    setTimeout(() => beep(900, 0.18, 1.0), 250);
-    setTimeout(() => beep(1400, 0.18, 1.0), 500);
-    setTimeout(() => beep(1000, 0.18, 1.0), 750);
+    beep(1600, 0.14, 1.0);
+    setTimeout(() => beep(1600, 0.14, 1.0), 180);
+    setTimeout(() => beep(800, 0.18, 1.0), 400);
+    setTimeout(() => beep(1600, 0.14, 1.0), 650);
   };
 
-  polaBibBib();
-  state.alarmInterval = setInterval(polaBibBib, 1200);
+  polaTegas();
+  state.alarmInterval = setInterval(polaTegas, 900);
 
   if (navigator.vibrate) {
-    navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
+    navigator.vibrate([300, 100, 300, 100, 500]);
     state.vibrateInterval = setInterval(() => {
-      navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
-    }, 1200);
+      navigator.vibrate([300, 100, 300, 100, 500]);
+    }, 900);
   }
 }
 
@@ -636,7 +653,7 @@ function stopAlarmLoop() {
 }
 
 /* ============================================================
-   DETEKSI NOTIFIKASI (tarik dari atas / panel notifikasi)
+   DETEKSI NOTIFIKASI
    ============================================================ */
 function startNotifWatcher() {
   if (state.notifWatcher) return;
@@ -662,7 +679,7 @@ function stopNotifWatcher() {
 }
 
 /* ============================================================
-   TAMPILKAN INFO KESEMPATAN
+   INFO KESEMPATAN
    ============================================================ */
 function refreshKesempatanInfo() {
   const data = loadData();
@@ -897,7 +914,7 @@ function onFullscreenChange() {
 }
 
 /* ============================================================
-   CURANG → ALARM + SIMPAN + BATALKAN
+   CURANG → ALARM TEGAS + SIMPAN + BATALKAN
    ============================================================ */
 function curang(alasan) {
   if (state.selesai) return;
