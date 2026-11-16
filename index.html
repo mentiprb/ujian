@@ -328,6 +328,17 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .hasil-row span { color: var(--text-soft); font-weight: 500; }
 .hasil-row strong { font-weight: 800; color: var(--text); }
 
+.kesempatan-info {
+  background: linear-gradient(135deg, var(--kuning-50), var(--biru-50));
+  border: 2px dashed var(--kuning-300);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 16px 0;
+  text-align: center;
+  font-size: 14px;
+}
+.kesempatan-info strong { color: var(--biru-600); font-size: 18px; }
+
 /* ===== OVERLAY PELANGGARAN ===== */
 .overlay-batal {
   position: fixed;
@@ -355,7 +366,7 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   border: 3px solid rgba(255,255,255,.35);
 }
 .batal-content h1 {
-  font-size: 30px;
+  font-size: 28px;
   margin-bottom: 20px;
   color: #fff;
   animation: shake .5s;
@@ -365,8 +376,9 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   25% { transform: translateX(-10px); }
   75% { transform: translateX(10px); }
 }
-.batal-content p { font-size: 17px; margin-bottom: 10px; font-weight: 600; }
+.batal-content p { font-size: 16px; margin-bottom: 10px; font-weight: 600; }
 .batal-sub { opacity: .9; font-size: 14px !important; font-weight: 400 !important; }
+.batal-content button { margin-top: 20px; }
 
 /* ===== MOBILE ===== */
 @media (max-width: 480px) {
@@ -384,7 +396,7 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 
   <!-- ===== IDENTITAS ===== -->
   <section id="page-identitas" class="page active">
-    <div class="card">
+    <div class="card" id="card-identitas">
       <div class="card-header">
         <div class="card-icon">⚗️</div>
         <h1>Ujian Ikatan Kimia</h1>
@@ -397,6 +409,9 @@ button:disabled { opacity: .35; cursor: not-allowed; }
       <label>Nomor Absen (opsional)</label>
       <input type="number" id="input-absen" placeholder="Contoh: 12" />
       <p id="err-identitas" class="error"></p>
+      <div class="kesempatan-info" id="info-kesempatan">
+        Kesempatan tersisa: <strong>2</strong> dari 2
+      </div>
       <button id="btn-mulai" class="btn-primary">Mulai Ujian →</button>
     </div>
   </section>
@@ -446,7 +461,8 @@ button:disabled { opacity: .35; cursor: not-allowed; }
       <h1>⚠️ UJIAN DIBATALKAN ⚠️</h1>
       <p id="batal-alasan">Kecurangan terdeteksi.</p>
       <p class="batal-sub">Jawaban Anda telah otomatis disimpan.</p>
-      <p class="batal-sub">Ujian tidak dapat diulang.</p>
+      <p class="batal-sub" id="batal-info-kesempatan"></p>
+      <button id="btn-lanjut-setelah-batal" class="btn-secondary">Lanjut</button>
     </div>
   </div>
 
@@ -457,10 +473,11 @@ button:disabled { opacity: .35; cursor: not-allowed; }
    KONFIGURASI
    ============================================================ */
 const CONFIG = {
-  durasiUjianMenit: 30
+  durasiUjianMenit: 30,
+  maxKesempatan: 2
 };
 
-const KEY_RIWAYAT = 'ujian_ikatan_kimia_selesai';
+const KEY_DATA = 'ujian_ikatan_kimia_data';
 
 /* ============================================================
    10 SOAL IKATAN KIMIA
@@ -489,6 +506,20 @@ const SOAL = [
 ];
 
 /* ============================================================
+   DATA TERSIMPAN: { kesempatanTerpakai, riwayat: [] }
+   ============================================================ */
+function loadData() {
+  try {
+    const raw = localStorage.getItem(KEY_DATA);
+    if (!raw) return { kesempatanTerpakai: 0, riwayat: [] };
+    return JSON.parse(raw);
+  } catch (e) {
+    return { kesempatanTerpakai: 0, riwayat: [] };
+  }
+}
+function saveData(d) { localStorage.setItem(KEY_DATA, JSON.stringify(d)); }
+
+/* ============================================================
    STATE
    ============================================================ */
 const state = {
@@ -501,7 +532,7 @@ const state = {
   audioCtx: null,
   mulai: false,
   selesai: false,
-  dibatalkan: false
+  percobaanKe: 0
 };
 
 const $ = (id) => document.getElementById(id);
@@ -511,12 +542,14 @@ const show = (id) => {
 };
 
 /* ============================================================
-   AUDIO — Web Audio API (bunyi walau HP silent)
+   AUDIO — Web Audio API (bunyi konsisten walau HP SILENT)
    ============================================================ */
 function initAudio() {
   try {
-    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const buf = state.audioCtx.createBuffer(1, 1, 22050);
+    const AC = window.AudioContext || window.webkitAudioContext;
+    state.audioCtx = new AC({ latencyHint: 'interactive' });
+    // Unlock AudioContext (wajib iOS)
+    const buf = state.audioCtx.createBuffer(1, 1, 44100);
     const src = state.audioCtx.createBufferSource();
     src.buffer = buf;
     src.connect(state.audioCtx.destination);
@@ -524,59 +557,113 @@ function initAudio() {
   } catch (e) { console.warn("Audio gagal:", e); }
 }
 
-function putarAlarmKeras() {
+async function ensureAudioReady() {
+  if (!state.audioCtx) initAudio();
+  if (state.audioCtx && state.audioCtx.state === 'suspended') {
+    try { await state.audioCtx.resume(); } catch (e) {}
+  }
+}
+
+async function putarAlarmKeras() {
+  await ensureAudioReady();
+
   if (state.audioCtx) {
     const ctx = state.audioCtx;
-    if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
-    // Sirene keras selama ~4 detik
+    // Master gain agar suara konsisten & maksimal
+    const master = ctx.createGain();
+    master.gain.value = 1.0;
+    master.connect(ctx.destination);
+
+    // Sirene 8 nada keras, 4 detik
     for (let i = 0; i < 8; i++) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'square';
-      osc.frequency.value = i % 2 === 0 ? 1000 : 500;
-      gain.gain.setValueAtTime(0, now + i * 0.5);
-      gain.gain.linearRampToValueAtTime(1.0, now + i * 0.5 + 0.05);
-      gain.gain.linearRampToValueAtTime(0, now + i * 0.5 + 0.45);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(now + i * 0.5);
-      osc.stop(now + i * 0.5 + 0.5);
+      osc.frequency.value = i % 2 === 0 ? 1100 : 550;
+      const start = now + i * 0.5;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(1.0, start + 0.04);
+      gain.gain.linearRampToValueAtTime(0, start + 0.45);
+      osc.connect(gain).connect(master);
+      osc.start(start);
+      osc.stop(start + 0.5);
+    }
+
+    // Tambahan: oscillator low-pass bass untuk menambah "berat"
+    const bass = ctx.createOscillator();
+    const bassGain = ctx.createGain();
+    bass.type = 'sawtooth';
+    bass.frequency.value = 180;
+    bassGain.gain.setValueAtTime(0.8, now);
+    bassGain.gain.linearRampToValueAtTime(0, now + 4);
+    bass.connect(bassGain).connect(master);
+    bass.start(now);
+    bass.stop(now + 4);
+  }
+
+  // Getar (fallback)
+  if (navigator.vibrate) navigator.vibrate([800, 200, 800, 200, 800, 200, 800]);
+
+  // Loop ulang selama overlay tampil — untuk memastikan suara tidak putus
+  if (state.mulai === false && state.selesai === true) {
+    if (!state.alarmLoop) {
+      state.alarmLoop = setInterval(async () => {
+        if (document.getElementById('overlay-batal').classList.contains('hidden')) {
+          clearInterval(state.alarmLoop);
+          state.alarmLoop = null;
+          return;
+        }
+        await ensureAudioReady();
+        if (state.audioCtx) {
+          const ctx = state.audioCtx;
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.value = 1000;
+          gain.gain.setValueAtTime(0.9, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.4);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.4);
+        }
+        if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+      }, 1000);
     }
   }
-  if (navigator.vibrate) navigator.vibrate([800, 200, 800, 200, 800, 200, 800]);
 }
 
 /* ============================================================
-   CEK APAKAH SUDAH PERNAH UJIAN
+   TAMPILKAN INFO KESEMPATAN DI HALAMAN IDENTITAS
    ============================================================ */
-(function cekRiwayat() {
-  const riwayat = localStorage.getItem(KEY_RIWAYAT);
-  if (riwayat) {
-    const data = JSON.parse(riwayat);
-    show('page-identitas');
-    document.querySelector('#page-identitas .card').innerHTML = `
-      <div class="card-header">
-        <div class="card-icon">🔒</div>
-        <h1>Ujian Sudah Selesai</h1>
-        <p class="subtitle">Anda telah menyelesaikan ujian ini.</p>
-      </div>
-      <div class="hasil-row"><span>Nama</span><strong>${data.nama || '-'}</strong></div>
-      <div class="hasil-row"><span>Kelas</span><strong>${data.kelas || '-'}</strong></div>
-      <div class="hasil-row"><span>Status</span><strong style="color:var(--danger)">${data.status}</strong></div>
-      <div class="hasil-row"><span>Nilai</span><strong>${data.nilai}</strong></div>
-      <p class="subtitle" style="margin-top:20px;text-align:center">
-        Ujian tidak dapat diulang. Hubungi pengawas jika ada kesalahan.
-      </p>
-    `;
+function refreshKesempatanInfo() {
+  const data = loadData();
+  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  const info = $('info-kesempatan');
+  const btn = $('btn-mulai');
+
+  if (sisa > 0) {
+    info.innerHTML = `Kesempatan tersisa: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`;
+    info.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = data.kesempatanTerpakai === 0 ? "Mulai Ujian →" : `Mulai Percobaan ke-${data.kesempatanTerpakai + 1} →`;
+  } else {
+    info.innerHTML = `Kesempatan sudah habis (0 dari ${CONFIG.maxKesempatan}).`;
+    info.style.display = 'block';
+    btn.disabled = true;
+    btn.textContent = "Kesempatan Habis";
   }
-})();
+}
+refreshKesempatanInfo();
 
 /* ============================================================
    MULAI UJIAN
    ============================================================ */
-$('btn-mulai').addEventListener('click', () => {
-  if (localStorage.getItem(KEY_RIWAYAT)) {
-    alert("Ujian sudah pernah diselesaikan dan tidak dapat diulang.");
+$('btn-mulai').addEventListener('click', async () => {
+  const data = loadData();
+  if (data.kesempatanTerpakai >= CONFIG.maxKesempatan) {
+    alert("Kesempatan ujian sudah habis.");
     return;
   }
 
@@ -588,22 +675,26 @@ $('btn-mulai').addEventListener('click', () => {
   if (kelas.length < 1) return ($('err-identitas').textContent = "Kelas wajib diisi.");
 
   state.identitas = { nama, kelas, absen };
+  state.percobaanKe = data.kesempatanTerpakai + 1;
   $('err-identitas').textContent = '';
+
+  // Init audio & unlock (dalam konteks gesture user)
   initAudio();
+  await ensureAudioReady();
+
   mulaiUjian();
 });
 
 function mulaiUjian() {
   state.mulai = true;
   state.selesai = false;
-  state.dibatalkan = false;
   state.jawaban = {};
   state.ragu = {};
   state.current = 0;
   state.sisaDetik = CONFIG.durasiUjianMenit * 60;
 
   $('exam-nama').textContent = state.identitas.nama;
-  $('exam-kelas').textContent = state.identitas.kelas;
+  $('exam-kelas').textContent = `${state.identitas.kelas} • Percobaan ke-${state.percobaanKe}`;
   $('total-soal').textContent = SOAL.length;
   $('total-soal-2').textContent = SOAL.length;
 
@@ -612,10 +703,15 @@ function mulaiUjian() {
   renderNav();
   startTimer();
   aktifkanAntiCurang();
+
+  // Minta fullscreen (best-effort)
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
 }
 
 /* ============================================================
-   RENDER SOAL — hanya soal saat ini, tidak bisa diubah setelah maju
+   RENDER SOAL
    ============================================================ */
 function renderSoal() {
   const s = SOAL[state.current];
@@ -643,9 +739,7 @@ function renderSoal() {
   });
 
   $('btn-ragu').textContent = state.ragu[state.current] ? "⚑ Hapus Ragu" : "⚑ Ragu";
-  $('btn-next').textContent = state.current === SOAL.length - 1
-    ? "Selesai ✓"
-    : "Selanjutnya →";
+  $('btn-next').textContent = state.current === SOAL.length - 1 ? "Selesai ✓" : "Selanjutnya →";
 }
 
 function pilihJawaban(i) {
@@ -661,11 +755,7 @@ function renderNav() {
     const btn = document.createElement('button');
     btn.className = 'nav-btn';
     if (i === state.current) btn.classList.add('current');
-    else if (i < state.current) {
-      // Soal lampau tidak bisa diklik, hanya menampilkan status
-      if (state.jawaban[i] !== undefined) btn.classList.add('answered');
-      btn.classList.add('locked');
-    } else {
+    else {
       if (state.jawaban[i] !== undefined) btn.classList.add('answered');
       btn.classList.add('locked');
     }
@@ -682,7 +772,7 @@ function updateProgress() {
 }
 
 /* ============================================================
-   NEXT & SELESAI — tanpa tombol PREV
+   NAVIGASI & SELESAI
    ============================================================ */
 $('btn-next').addEventListener('click', () => {
   if (state.jawaban[state.current] === undefined) {
@@ -746,16 +836,9 @@ function aktifkanAntiCurang() {
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onBlur);
   document.addEventListener('fullscreenchange', onFullscreenChange);
-
-  // Blokir context menu, copy, paste
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('copy', (e) => e.preventDefault());
   document.addEventListener('paste', (e) => e.preventDefault());
-
-  // Coba masuk fullscreen (diperlukan izin gesture, sudah di-trigger saat klik Mulai)
-  if (document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  }
 }
 
 function onVisibilityChange() {
@@ -767,7 +850,7 @@ function onVisibilityChange() {
 function onBlur() {
   if (!state.mulai || state.selesai) return;
   setTimeout(() => {
-    if (document.hidden) return; // sudah ditangani visibilitychange
+    if (document.hidden) return;
     if (!state.mulai || state.selesai) return;
     curang("Jendela ujian kehilangan fokus / ada notifikasi");
   }, 300);
@@ -780,45 +863,44 @@ function onFullscreenChange() {
 }
 
 /* ============================================================
-   CURANG → SIMPAN OTOMATIS → BATALKAN PERMANEN
+   CURANG → SIMPAN → BATALKAN PERCOBAAN
    ============================================================ */
 function curang(alasan) {
   if (state.selesai) return;
   state.selesai = true;
-  state.dibatalkan = true;
   state.mulai = false;
   clearInterval(state.timerInterval);
 
-  // 1. Bunyikan alarm keras (Web Audio API)
+  // 1. Bunyi alarm keras
   putarAlarmKeras();
 
-  // 2. Simpan otomatis jawaban + status curang
-  simpanRiwayat("DIBATALKAN", 0);
+  // 2. Simpan jawaban otomatis + hitung kesempatan
+  const data = loadData();
+  data.kesempatanTerpakai += 1;
+  data.riwayat.push({
+    percobaanKe: state.percobaanKe,
+    nama: state.identitas?.nama || '-',
+    kelas: state.identitas?.kelas || '-',
+    status: 'DIBATALKAN',
+    alasan,
+    nilai: 0,
+    jawaban: { ...state.jawaban },
+    waktu: new Date().toISOString()
+  });
+  saveData(data);
 
   // 3. Lepas listener
   document.removeEventListener('visibilitychange', onVisibilityChange);
   window.removeEventListener('blur', onBlur);
   document.removeEventListener('fullscreenchange', onFullscreenChange);
 
-  // 4. Tampilkan layar merah
+  // 4. Tampilkan overlay merah
   $('batal-alasan').textContent = "Pelanggaran: " + alasan;
+  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+  $('batal-info-kesempatan').textContent = sisa > 0
+    ? `Kesempatan tersisa: ${sisa}`
+    : `Kesempatan sudah habis.`;
   $('overlay-batal').classList.remove('hidden');
-}
-
-/* ============================================================
-   SIMPAN RIWAYAT & TUTUP PERMANEN
-   ============================================================ */
-function simpanRiwayat(status, nilai) {
-  const data = {
-    nama: state.identitas?.nama || '-',
-    kelas: state.identitas?.kelas || '-',
-    absen: state.identitas?.absen || '-',
-    status,
-    nilai,
-    jawaban: state.jawaban,
-    waktu: new Date().toISOString()
-  };
-  localStorage.setItem(KEY_RIWAYAT, JSON.stringify(data));
 }
 
 /* ============================================================
@@ -835,25 +917,98 @@ function selesaikanUjian(waktuHabis = false) {
   const salah = SOAL.length - benar;
   const nilai = Math.round((benar / SOAL.length) * 100);
 
-  simpanRiwayat("SELESAI", nilai);
+  // Simpan riwayat + tambah kesempatan terpakai
+  const data = loadData();
+  data.kesempatanTerpakai += 1;
+  data.riwayat.push({
+    percobaanKe: state.percobaanKe,
+    nama: state.identitas.nama,
+    kelas: state.identitas.kelas,
+    status: waktuHabis ? 'WAKTU_HABIS' : 'SELESAI',
+    nilai,
+    jawaban: { ...state.jawaban },
+    waktu: new Date().toISOString()
+  });
+  saveData(data);
 
   $('hasil-title').textContent = waktuHabis ? "⏰ Waktu Habis" : "✅ Ujian Selesai";
+
+  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
 
   let html = `
     <div class="hasil-row"><span>Nama</span><strong>${state.identitas.nama}</strong></div>
     <div class="hasil-row"><span>Kelas</span><strong>${state.identitas.kelas}</strong></div>
+    <div class="hasil-row"><span>Percobaan ke-</span><strong>${state.percobaanKe}</strong></div>
     <div class="hasil-row"><span>Jawaban Benar</span><strong style="color:var(--success)">${benar}</strong></div>
     <div class="hasil-row"><span>Jawaban Salah</span><strong style="color:var(--danger)">${salah}</strong></div>
     <div class="hasil-row"><span>Nilai</span><strong style="font-size:22px;color:var(--biru-600)">${nilai}</strong></div>
-    <div class="hasil-row"><span>Status</span><strong style="color:var(--success)">SELESAI</strong></div>
-    <p class="subtitle" style="margin-top:20px;text-align:center">
-      Ujian telah selesai dan tidak dapat diulang.
-    </p>
+    <div class="kesempatan-info">
+      ${sisa > 0
+        ? `Kesempatan tersisa: <strong>${sisa}</strong> dari ${CONFIG.maxKesempatan}`
+        : `Kesempatan sudah habis.`}
+    </div>
   `;
+
+  if (sisa > 0) {
+    html += `<button id="btn-ulang" class="btn-primary full">Coba Lagi (Percobaan ke-${data.kesempatanTerpakai + 1})</button>`;
+  } else {
+    html += `<button class="btn-secondary full" disabled>Kesempatan Habis</button>`;
+  }
 
   $('hasil-content').innerHTML = html;
   show('page-hasil');
+
+  // Hapus riwayat percobaan sebelumnya agar ujian berikutnya "bersih"
+  // (sudah cukup karena state direset di mulaiUjian berikutnya)
+
+  if (sisa > 0) {
+    $('btn-ulang').addEventListener('click', () => {
+      state.jawaban = {};
+      state.ragu = {};
+      state.current = 0;
+      show('page-identitas');
+      refreshKesempatanInfo();
+    });
+  }
 }
+
+/* ============================================================
+   OVERLAY: LANJUT SETELAH BATAL
+   ============================================================ */
+$('btn-lanjut-setelah-batal').addEventListener('click', () => {
+  // Hentikan loop alarm
+  if (state.alarmLoop) { clearInterval(state.alarmLoop); state.alarmLoop = null; }
+  $('overlay-batal').classList.add('hidden');
+
+  const data = loadData();
+  const sisa = CONFIG.maxKesempatan - data.kesempatanTerpakai;
+
+  if (sisa > 0) {
+    // Masih ada kesempatan → kembali ke identitas (tanpa reset nama)
+    state.jawaban = {};
+    state.ragu = {};
+    state.current = 0;
+    show('page-identitas');
+    refreshKesempatanInfo();
+    if (state.identitas) {
+      $('input-nama').value = state.identitas.nama;
+      $('input-kelas').value = state.identitas.kelas;
+      $('input-absen').value = state.identitas.absen || '';
+    }
+  } else {
+    // Kesempatan habis → tampilkan hasil akhir
+    show('page-hasil');
+    $('hasil-title').textContent = "🔒 Kesempatan Habis";
+    $('hasil-content').innerHTML = `
+      <p class="subtitle" style="text-align:center;margin-top:20px">
+        Anda telah menggunakan ${CONFIG.maxKesempatan} kesempatan ujian.
+      </p>
+      <div class="kesempatan-info">
+        <strong>0</strong> dari ${CONFIG.maxKesempatan} kesempatan tersisa
+      </div>
+    `;
+  }
+});
 </script>
 </body>
 </html>
